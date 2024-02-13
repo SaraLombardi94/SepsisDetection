@@ -6,7 +6,7 @@ Created on Fri Feb  9 17:36:40 2024
 """
 
 import pandas as pd
-
+import os
 
 file_excel = r"C:\Users\Utente\Desktop\Repository GitHub\tesi magistrale\data\features_segnali_sepsi_100sigxpatient_nopatientwithlessthan100sig.xlsx"
 OutDir = r"C:\Users\Utente\Desktop\Repository GitHub\tesi magistrale\data"
@@ -39,4 +39,5 @@ for paziente, group in df.groupby('Paziente'):
 risultati = pd.DataFrame(dati_risultati)
 
 # Salva il DataFrame in un nuovo file Excel
-risultati.to_excel(OutDir, "risultati_media_per_paziente.xlsx", index=False)
+risultati.to_excel(os.path.join(OutDir, "risultati_media_per_paziente_sepsi.xlsx"), index=False)
+
