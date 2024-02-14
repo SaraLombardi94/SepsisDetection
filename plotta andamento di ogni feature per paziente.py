@@ -10,7 +10,7 @@ import pandas as pd
 import matplotlib.pyplot as plt 
 import numpy as np
 
-file_excel = r"C:/Users/Utente/Desktop/Repository GitHub/tesi magistrale/data/features_segnali_sepsi_100sigxpatient_nopatientwithlessthan100sig.xlsx"
+file_excel = r"D:/phD_Sara/tesiPaolo/SepsisDetection/data/features_segnali_controlli_100sigxpatient_nopatientwithlessthan100sig_nooutliers.xlsx"
 
 df = pd.read_excel(file_excel)
 data = df.to_numpy()

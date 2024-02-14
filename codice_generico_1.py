@@ -17,7 +17,7 @@ t_sample = 1/f #tempo di campionamento
 n_samples = f*120 #numero di campioni considerato del segnale discreto
 
 # Definisci il percorso della cartella contenente i file
-cartella = r"D:\phD_Sara\data\control\segments2min"
+cartella = r"D:\phD_Sara\data\sepsis\segments2min"
 outDir = r"D:\phD_Sara\tesiPaolo"
 
 
@@ -239,7 +239,7 @@ for nome_file_npz in os.listdir(cartella):
     
 # Fine del ciclo, tutti i file NPZ sono stati elaborati    
 # Salva il DataFrame aggiornato nel file Excel
-df.to_excel(os.path.join(outDir,'features_segnali_controlli.xlsx'), index=False)
+df.to_excel(os.path.join(outDir,'features_segnali_sepsi.xlsx'), index=False)
     
       
     

@@ -20,7 +20,7 @@ model = KNeighborsClassifier(n_neighbors=25)
 
 
 # Carica il file XLSX
-df = pd.read_excel("C:/Users/Utente/Desktop/Repository GitHub/tesi magistrale/data/input machine learning_nomediane.xlsx")
+df = pd.read_excel(r"D:/phD_Sara/tesiPaolo/SepsisDetection/data/input machine learning_nomediane.xlsx")
 
 # Seleziona tutte le colonne tranne la prima
 df_selected = df.iloc[:, 1:]
@@ -36,8 +36,8 @@ with open("file.csv") as f:
     data = []
     for row in reader:
         data.append({
-            "evidence": [float(cell) for cell in row[:16]],
-            "label": "sano" if row[16] == "0" else "patologico"
+            "evidence": [float(cell) for cell in row[:8]],
+            "label": "sano" if row[8] == "0" else "patologico"
         })
 
 # Separate data into training and testing groups
