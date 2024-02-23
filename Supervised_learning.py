@@ -1,74 +1,58 @@
 # -*- coding: utf-8 -*-
 """
-Created on Mon Feb 12 10:49:53 2024
+Created on Tue Feb 20 15:52:18 2024
 
 @author: Utente
 """
 
-import csv
-import random
 import pandas as pd
-from sklearn import svm
-from sklearn.linear_model import Perceptron
-from sklearn.naive_bayes import GaussianNB
-from sklearn.neighbors import KNeighborsClassifier
-
-model = KNeighborsClassifier(n_neighbors=25)
-#model = svm.SVC()
-#model = Perceptron()
-
-
+from sklearn.model_selection import train_test_split
+from sklearn.svm import SVC
+from sklearn.metrics import accuracy_score
 
 # Carica il file XLSX
-df = pd.read_excel(r"D:/phD_Sara/tesiPaolo/SepsisDetection/data/input machine learning_nomediane.xlsx")
+df = pd.read_excel(r"C:/Users/Utente/Desktop/Repository GitHub/tesi magistrale/data/features_segnali_merged_nooutliers_100sigxpatient_nolessthan100_prova.xlsx")
 
-# Seleziona tutte le colonne tranne la prima
-df_selected = df.iloc[:, 1:]
 
 # Salva il DataFrame selezionato in un file CSV
-df_selected.to_csv("file.csv", index=False)
+df.to_csv("file.csv", index=False)
 
-# Read data in from file
-with open("file.csv") as f:
-    reader = csv.reader(f)
-    next(reader)
+# Carica il dataset
+dataset = pd.read_csv("file.csv")
 
-    data = []
-    for row in reader:
-        data.append({
-            "evidence": [float(cell) for cell in row[:8]],
-            "label": "sano" if row[8] == "0" else "patologico"
-        })
+# Raggruppa i dati per paziente
+pazienti = dataset.groupby('Patient_ID')
 
-# Separate data into training and testing groups
-holdout = int(0.40 * len(data))
-random.shuffle(data)
-testing = data[:holdout]
-training = data[holdout:]
+# Inizializza i set di training e test
+X_train, X_test, y_train, y_test = pd.DataFrame(), pd.DataFrame(), pd.Series(dtype='float64'), pd.Series(dtype='float64')
 
-# Train model on training set
-X_training = [row["evidence"] for row in training]
-y_training = [row["label"] for row in training]
-model.fit(X_training, y_training)
+# Per ciascun paziente, aggiungi i segnali al set di training o test
+for paziente, segnali in pazienti:
+    X_paziente = segnali.drop(columns=['Patient_ID','nome_segnale', 'label'])  # Carica le features
+    y_paziente = segnali['label']  # Carica le etichette
 
-# Make predictions on the testing set
-X_testing = [row["evidence"] for row in testing]
-y_testing = [row["label"] for row in testing]
-predictions = model.predict(X_testing)
+    # Dividi i segnali del paziente in set di training e test
+    X_train_paziente, X_test_paziente, y_train_paziente, y_test_paziente = train_test_split(X_paziente, y_paziente, test_size=0.2, random_state=42)
 
-# Compute how well we performed
-correct = 0
-incorrect = 0
-total = 0
-for actual, predicted in zip(y_testing, predictions):
-    total += 1
-    if actual == predicted:
-        correct += 1
-    else:
-        incorrect += 1
+    # Aggiungi i segnali di training e test ai set globali
+    X_train = pd.concat([X_train, X_train_paziente])
+    X_test = pd.concat([X_test, X_test_paziente])
+    y_train = pd.concat([y_train, y_train_paziente])
+    y_test = pd.concat([y_test, y_test_paziente])
 
-# Print results
-print(f"Results for model {type(model).__name__}")
-print(f"Correct: {correct}")
-print(f"Incorrect: {incorrect}")
-print(f"Accuracy: {100 * correct / total:.2f}%")
+# Ora hai i set di training e test con tutti i segnali dei pazienti divisi correttamente.
+
+# Inizializza il modello SVM
+model = SVC(kernel='linear')
+
+# Addestra il modello sui dati di training
+model.fit(X_train, y_train)
+
+# Effettua le predizioni sui dati di test
+predictions = model.predict(X_test)
+
+# Calcola l'accuratezza del modello sui dati di test
+accuracy = accuracy_score(y_test, predictions)
+
+# Stampa l'accuratezza
+print("Accuracy:", accuracy)
