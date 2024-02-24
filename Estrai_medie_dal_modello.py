@@ -37,12 +37,16 @@ for file in file_selezionati:
         # Filtra le righe con R2_of_fit inferiore a 0.90
         df_filtrato = df[df['R2_of_fit'] >= 0.90]
         # Calcola la media di ciascuna caratteristica
-        medie_caratteristiche = df.mean()
+        medie_caratteristiche = df_filtrato.mean()
         # Aggiungi le medie come nuove righe al DataFrame empty_df
         for caratteristica, media in medie_caratteristiche.items():
             empty_df.at[i, caratteristica] = media
         i = i+1
-# Salva il DataFrame delle medie in un nuovo file Excel
-empty_df.to_excel(r'C:/Users/Utente/Desktop/prova_medie.xlsx')
+    
+#rimuovo dalla colonna nome_segnale la parte .npz.csv
+empty_df['nome_segnale'] = empty_df['nome_segnale'].str.replace('.npz.csv', '')
 
-        
+# Salva il DataFrame delle medie in un nuovo file Excel
+empty_df.to_excel(r'C:/Users/Utente/Desktop/Repository GitHub/tesi magistrale/data/expModeling/medie_modello_controlli.xlsx', index=False)
+
+
