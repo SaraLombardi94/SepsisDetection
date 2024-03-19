@@ -181,7 +181,7 @@ def perform_nested_cv(model_name, X_train, y_train):
             'activation': ['relu', 'tanh'],
             'solver': ['adam', 'sgd'],
             'learning_rate_init': [0.001, 0.01],
-            'max_iter': [300, 500]  # Aumenta se necessario
+            'max_iter': [3000]  # Aumenta se necessario
         }
     else:
         raise ValueError(f"Modello {model_name} non supportato.")
@@ -233,7 +233,7 @@ def create_confusion_matrix(y,y_pred, classes):
 
 
 # Carica il dataset
-df = load_dataset(r'C:/Users/paolo/Downloads/all_features_with_subid.xlsx')
+df = load_dataset(r'C:/Users/Utente/Desktop/Repository GitHub/tesi magistrale/data/all_features_with_subid.xlsx')
 # Riempi i valori mancanti con la media della colonna
 fill_missing_values(df)
 X = df.drop(columns=['label', 'nome_segnale', 'SubId','R2_of_fit'])
@@ -242,7 +242,7 @@ groups = df['SubId']  # Colonna SubId per i gruppi
 
 
 # Definisci il numero di fold
-k = 25
+k = 15
 # Definisci il numero di features che voglio utilizzare
 k_features = 15
 
@@ -292,7 +292,7 @@ for fold, (train_index, test_index) in enumerate(group_kfold.split(X, y, groups)
 #### NORMALIZZO LE FEATURES ####
 
     # normalize data based on training set distribution
-    X_train_std, X_test_std = standard_scale_features(X_train_s, X_test_s)
+    X_train_std, X_test_std = robust_scale_features(X_train_s, X_test_s)
 
 #### SCELTA DEGLI IPERPARAMETRI PER OGNI FOLD ####
 
