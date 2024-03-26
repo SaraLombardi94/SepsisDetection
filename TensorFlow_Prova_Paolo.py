@@ -30,30 +30,30 @@ from tensorflow.keras.callbacks import ReduceLROnPlateau, LearningRateScheduler
 import matplotlib.pyplot as plt
 
 #constants
-FS = 10
+FS = 125
 N_CLASSES = 2 # control, sepsis
 LR = 1e-6
-BATCH_SIZE = 16
-EPOCHS = 800
-K = 5
+BATCH_SIZE = 128
+EPOCHS = 200
+K = 3
 NSAMPLES = FS*30
-WINDOW_LENGTH = FS * 30 * 1 
+WINDOW_LENGTH = FS * 60 * 1 
 NORMRANGE = (-1,1)
-NORMALIZE = False
+NORMALIZE = True
 USE_SHUFFLE = True
-USE_WINDOWS = False
+USE_WINDOWS = True
 USE_JITTER = False
 USE_LOSO = False
 DROPOUT_RATE = 0.2
 RANDOM_STATE = 12
 BUFFER_SHUFFLING_SIZE = 180
 KERNEL_INITIALIZER='glorot_uniform'
-LOSSFUNCTION = tf.keras.losses.MeanSquaredError()
+LOSSFUNCTION = tf.keras.losses.BinaryCrossentropy()
 OPTIMIZER = tf.keras.optimizers.Adam(learning_rate=LR)
-MODELNAME = f'{K}fold_RS{RANDOM_STATE}_dsTM2min30_saraCnn1_mse_bs{BATCH_SIZE}_lre{LR}_windows{WINDOW_LENGTH}onset_jitter{USE_JITTER}_ep{EPOCHS}_bis'
+MODELNAME = f'{K}fold_dsTM2min30_saraCnn1_mse_bs{BATCH_SIZE}_lre{LR}_windows{WINDOW_LENGTH}onset_jitter{USE_JITTER}_ep{EPOCHS}_2'
 
-MODELDIR = r'C:\Users\Utente\Desktop\cartella_prova_DL'
-DATASETDIR = r'C:\Users\Utente\Desktop\rawSignals\rawSignals'
+MODELDIR = r'D:\phD_Sara\tesiPaolo\SepsisDetection\modelli'
+DATASETDIR = r'D:\phD_Sara\tesiPaolo\SepsisDetection\data\rawSignals'
 LOGDIR = os.path.join(MODELDIR,MODELNAME,'logs')
 WEIGHTSDIR = os.path.join(MODELDIR,MODELNAME,'weights')
 CLASSES = ['control','sepsis']
@@ -108,7 +108,7 @@ def load_and_select_window(filepath, y):
             start_timestep = random.choice(onsetList)
         signal_data = signal_data[start_timestep:start_timestep + WINDOW_LENGTH]
     y = to_categorical(y, num_classes=len(CLASSES))
-    return signal_data.astype(np.float64), y.astype(np.float64)
+    return signal_data, y
 
 
 
@@ -194,9 +194,9 @@ def create_dataset(X_train, y_train, X_val, y_val):
   ds_train = ds_train.map(lambda filepath, label : tf.numpy_function(
         load_and_select_window, [filepath, label], (tf.double, tf.float32)))
 # =============================================================================
-  if USE_WINDOWS:
-        ds_train = ds_train.map(lambda filepath, label: tf.numpy_function(
-        random_window, [filepath, label, onsetList], (tf.double, tf.float32)))
+  # if USE_WINDOWS:
+  #       ds_train = ds_train.map(lambda filepath, label: tf.numpy_function(
+  #       random_window, [filepath, label, onsetList], (tf.double, tf.float32)))
 #   if NORMALIZE:
 #   ds_train = ds_train.map(lambda filepath, label: tf.numpy_function(
 #         normalize, [filepath, label], (tf.double, tf.float32)))
@@ -220,9 +220,9 @@ def create_dataset(X_train, y_train, X_val, y_val):
         load_and_select_window, [filepath, label], (tf.double, tf.float32)))
   
 # =============================================================================
-  if USE_WINDOWS:
-       ds_valid = ds_valid.map(lambda filepath, label: tf.numpy_function(
-       random_window, [filepath, label], (tf.double, tf.float32)))
+  # if USE_WINDOWS:
+  #      ds_valid = ds_valid.map(lambda filepath, label: tf.numpy_function(
+  #      random_window, [filepath, label], (tf.double, tf.float32)))
 # 
 #   ds_valid = ds_valid.map(lambda filepath, label: tf.numpy_function(
 #         normalize, [filepath, label], (tf.double, tf.float32)))
@@ -344,7 +344,7 @@ for i in range(0, K):
 
   #### TESTING ####
   print('start testing...')
-  modelB = tf.keras.models.load_model(os.path.join(WEIGHTSDIR,f'{i}fold'))
+  modelB = tf.keras.models.load_model(os.path.join(WEIGHTSDIR,f'{i}fold.keras'))
   score = modelB.evaluate(ds_valid, verbose=1, callbacks=[tensorboard])
   print('Val loss:', score[0])
   print('Val accuracy:', score[1])
