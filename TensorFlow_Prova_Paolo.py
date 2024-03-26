@@ -1,9 +1,5 @@
 # -*- coding: utf-8 -*-
-"""
-Created on Tue Mar 19 16:44:10 2024
 
-@author: Sara
-"""
 
 """
 Created on Tue Aug 30 08:53:12 2022
@@ -17,7 +13,7 @@ import numpy as np
 import tensorflow.keras
 import tensorflow as tf
 from glob import glob
-import tensorflow_addons as tfa
+#import tensorflow_addons as tfa
 import sklearn
 from tensorflow.keras.utils import to_categorical
 from sklearn.model_selection import KFold, train_test_split, GroupShuffleSplit, StratifiedGroupKFold, GroupKFold
@@ -34,7 +30,7 @@ from tensorflow.keras.callbacks import ReduceLROnPlateau, LearningRateScheduler
 import matplotlib.pyplot as plt
 
 #constants
-FS = 60
+FS = 10
 N_CLASSES = 2 # control, sepsis
 LR = 1e-6
 BATCH_SIZE = 16
@@ -45,7 +41,7 @@ WINDOW_LENGTH = FS * 30 * 1
 NORMRANGE = (-1,1)
 NORMALIZE = False
 USE_SHUFFLE = True
-USE_WINDOWS = True
+USE_WINDOWS = False
 USE_JITTER = False
 USE_LOSO = False
 DROPOUT_RATE = 0.2
@@ -56,12 +52,12 @@ LOSSFUNCTION = tf.keras.losses.MeanSquaredError()
 OPTIMIZER = tf.keras.optimizers.Adam(learning_rate=LR)
 MODELNAME = f'{K}fold_RS{RANDOM_STATE}_dsTM2min30_saraCnn1_mse_bs{BATCH_SIZE}_lre{LR}_windows{WINDOW_LENGTH}onset_jitter{USE_JITTER}_ep{EPOCHS}_bis'
 
-MODELDIR = r'C:\Users\Sara\Desktop\CovidPPG\models'
-DATASETDIR = r'D:\phD_Sara\tesiPaolo\SepsisDetection\data\rawSignals'
+MODELDIR = r'C:\Users\Utente\Desktop\cartella_prova_DL'
+DATASETDIR = r'C:\Users\Utente\Desktop\rawSignals\rawSignals'
 LOGDIR = os.path.join(MODELDIR,MODELNAME,'logs')
 WEIGHTSDIR = os.path.join(MODELDIR,MODELNAME,'weights')
 CLASSES = ['control','sepsis']
-PRETRAINED_MODELPATH = '/Users/saralombardi/Desktop/COVID/pre-trainedsepsi'
+#PRETRAINED_MODELPATH = '/Users/saralombardi/Desktop/COVID/pre-trainedsepsi'
 
 class LRTensorBoard(TensorBoard):
 
@@ -93,22 +89,30 @@ def normalize(x):
    x = sklearn.preprocessing.minmax_scale(x, feature_range = NORMRANGE)
    return x
 
-def load_and_select_window(x,y):
-    pathToPoints = x.removesuffix(b'.npy')
-    onsetList = np.loadtxt(pathToPoints.decode())
-    onsetList = onsetList.astype('int')
+###  AGGIUSTATA  #####
+def load_and_select_window(filepath, y):
+    # Assicurati che filepath sia una stringa
+    filepath = tf.compat.as_str_any(filepath)
+    # Costruisci il percorso per i punti di inizio basato sul percorso del file originale
+    pathToPoints = filepath.removesuffix('.npz') + '.txt'  # Assumi che i punti di inizio siano salvati in un file .txt con lo stesso nome base
+    # Carica l'elenco dei punti di inizio
+    onsetList = np.loadtxt(pathToPoints).astype(np.int64)
     start_timestep = random.choice(onsetList)
-    x = np.load(x).astype('float64')
-    x = np.reshape(x,[x.size,1])
+    # Carica i dati del segnale
+    signal_data = np.load(filepath)['arr_0'].astype('float64')
+    signal_data = np.reshape(signal_data, [signal_data.size, 1])
     if NORMALIZE:
-        x = normalize(x)
+        signal_data = normalize(signal_data)
     if USE_WINDOWS:
-        while((x[start_timestep:]).size < WINDOW_LENGTH):
+        while (signal_data[start_timestep:]).size < WINDOW_LENGTH:
             start_timestep = random.choice(onsetList)
-            
-        x = x[start_timestep:start_timestep + WINDOW_LENGTH]
-    y = to_categorical(y,num_classes=len(CLASSES))
-    return x, y
+        signal_data = signal_data[start_timestep:start_timestep + WINDOW_LENGTH]
+    y = to_categorical(y, num_classes=len(CLASSES))
+    return signal_data.astype(np.float64), y.astype(np.float64)
+
+
+
+######################
 
 def fix_shape(x, y):
   length = WINDOW_LENGTH
@@ -142,7 +146,7 @@ def jitter(x, y):
     return x_jitter, y
 
 
-
+####### AGGIUSTATA ##########
 def get_id(data_path):
     sub_ids = []
     for item in data_path:
@@ -152,8 +156,9 @@ def get_id(data_path):
             raise Exception(f'Subject name has to start with "p", for example pleth0. Found {sub_id}')
         sub_ids.append(sub_id)
     return sub_ids
+###################
 
-
+##### DOVREBBE ANDARE BENE #####
 def create_train_val_splits(train_paths):
   train_labels = createLabels(train_paths,CLASSES)
   #split train_paths in training and validation sets for k-fold crossvalidation
@@ -177,32 +182,6 @@ def create_train_val_splits(train_paths):
       y_val_splits.append(y_val)
   return X_train_splits, y_train_splits, X_val_splits, y_val_splits
 
-#STRATIFIED GROUP K-FOLD
-# =============================================================================
-# 
-# def create_train_val_splits(train_paths):
-#   train_labels = createLabels(train_paths,CLASSES)
-#   #split train_paths in training and validation sets for k-fold crossvalidation
-#   groups = get_id(train_paths)
-#   gkf = StratifiedGroupKFold(n_splits=K)
-#   # split is made according subject_ids (group list)
-#   gkf.get_n_splits(train_paths, train_labels, groups)
-#   X_train_splits = []
-#   y_train_splits = []
-#   X_val_splits = []
-#   y_val_splits = []
-#  
-#   for train_index, val_index in gkf.split(train_paths, train_labels, groups):
-#      X_train, y_train = np.asarray(train_paths)[train_index], np.asarray(train_labels)[train_index]
-#      X_train, y_train = shuffle(X_train, y_train, random_state=RANDOM_STATE)
-#      X_val, y_val = np.asarray(train_paths)[val_index], np.asarray(train_labels)[val_index]
-#      X_val, y_val = shuffle(X_val, y_val, random_state=RANDOM_STATE)
-#      X_train_splits.append(X_train)
-#      y_train_splits.append(y_train)
-#      X_val_splits.append(X_val)
-#      y_val_splits.append(y_val)
-#   return X_train_splits, y_train_splits, X_val_splits, y_val_splits
-# =============================================================================
 
 
 def create_dataset(X_train, y_train, X_val, y_val):
@@ -215,9 +194,9 @@ def create_dataset(X_train, y_train, X_val, y_val):
   ds_train = ds_train.map(lambda filepath, label : tf.numpy_function(
         load_and_select_window, [filepath, label], (tf.double, tf.float32)))
 # =============================================================================
-#   if USE_WINDOWS:
-#       ds_train = ds_train.map(lambda filepath, label: tf.numpy_function(
-#       random_window, [filepath, label, onsetList], (tf.double, tf.float32)))
+  if USE_WINDOWS:
+        ds_train = ds_train.map(lambda filepath, label: tf.numpy_function(
+        random_window, [filepath, label, onsetList], (tf.double, tf.float32)))
 #   if NORMALIZE:
 #   ds_train = ds_train.map(lambda filepath, label: tf.numpy_function(
 #         normalize, [filepath, label], (tf.double, tf.float32)))
@@ -241,9 +220,9 @@ def create_dataset(X_train, y_train, X_val, y_val):
         load_and_select_window, [filepath, label], (tf.double, tf.float32)))
   
 # =============================================================================
-#   if USE_WINDOWS:
-#       ds_valid = ds_valid.map(lambda filepath, label: tf.numpy_function(
-#       random_window, [filepath, label], (tf.double, tf.float32)))
+  if USE_WINDOWS:
+       ds_valid = ds_valid.map(lambda filepath, label: tf.numpy_function(
+       random_window, [filepath, label], (tf.double, tf.float32)))
 # 
 #   ds_valid = ds_valid.map(lambda filepath, label: tf.numpy_function(
 #         normalize, [filepath, label], (tf.double, tf.float32)))
@@ -256,109 +235,6 @@ def create_dataset(X_train, y_train, X_val, y_val):
   return ds_train, ds_valid
 
 # DEFINE MODELS
-
-def cnnAgePPG(input_shape, nclasses):
-    x_input = Input(input_shape)    
-    x = Convolution1D(filters=10, kernel_size=6, strides=1, activation='relu', kernel_initializer=KERNEL_INITIALIZER) (x_input)
-    x = Convolution1D(filters=8, kernel_size=5, strides=1, activation='relu', kernel_initializer=KERNEL_INITIALIZER) (x)
-    x = Flatten()(x)
-    x = Dense(1024, activation = 'relu', kernel_initializer=KERNEL_INITIALIZER)(x)
-    x = Dropout(DROPOUT_RATE)(x)
-    x = Dense(1024, activation = 'relu', kernel_initializer=KERNEL_INITIALIZER)(x)
-    x = Dropout(DROPOUT_RATE)(x)
-    x = Dense(nclasses, activation = 'softmax', kernel_initializer=KERNEL_INITIALIZER)(x)
-    #create model
-    model = Model(inputs = x_input, outputs = x , name = 'eegseizure')
-    return model 
-
-def eegSeizureModel(input_shape, nclasses):
-    x_input = Input(input_shape)    
-    x = Convolution1D(filters=4, kernel_size=6, strides=1, activation='relu', kernel_initializer=KERNEL_INITIALIZER) (x_input)
-    x = MaxPooling1D(pool_size=(2),padding='valid',strides=2)(x)
-    x = Convolution1D(filters=4, kernel_size=5, strides=1, activation='relu', kernel_initializer=KERNEL_INITIALIZER) (x)
-    x = MaxPooling1D(pool_size=(2),padding='valid',strides=2)(x)
-    x = Convolution1D(filters=10, kernel_size=4, strides=1, activation='relu', kernel_initializer=KERNEL_INITIALIZER) (x)
-    x = MaxPooling1D(pool_size=(2),padding='valid',strides=2)(x)
-    x = Convolution1D(filters=10, kernel_size=4, strides=1, activation='relu', kernel_initializer=KERNEL_INITIALIZER) (x)
-    x = MaxPooling1D(pool_size=(2),padding='valid',strides=2)(x)
-    x = Convolution1D(filters=15, kernel_size=4, strides=1, activation='relu',kernel_initializer=KERNEL_INITIALIZER) (x)
-    x = MaxPooling1D(pool_size=(2),padding='valid',strides=2)(x)
-    x = Flatten()(x)
-    x = Dense(50, activation = 'relu', kernel_initializer=KERNEL_INITIALIZER)(x)
-    x = Dense(20, activation = 'relu', kernel_initializer=KERNEL_INITIALIZER)(x)
-    x = Dense(nclasses, activation = 'softmax', kernel_initializer=KERNEL_INITIALIZER)(x)
-    #create model
-    model = Model(inputs = x_input, outputs = x , name = 'eegseizure')
-    return model 
-
-def eegSeizureModel1(input_shape, nclasses):
-    x_input = Input(input_shape)    
-    x = Convolution1D(filters=4, kernel_size=11, strides=1, activation='relu', kernel_initializer=KERNEL_INITIALIZER) (x_input)
-    x = MaxPooling1D(pool_size=(2),padding='valid',strides=2)(x)
-    x = Convolution1D(filters=4, kernel_size=7, strides=1, activation='relu', kernel_initializer=KERNEL_INITIALIZER) (x)
-    x = MaxPooling1D(pool_size=(2),padding='valid',strides=2)(x)
-    x = Convolution1D(filters=10, kernel_size=5, strides=1, activation='relu', kernel_initializer=KERNEL_INITIALIZER) (x)
-    x = MaxPooling1D(pool_size=(2),padding='valid',strides=2)(x)
-    x = Convolution1D(filters=10, kernel_size=3, strides=1, activation='relu', kernel_initializer=KERNEL_INITIALIZER) (x)
-    x = MaxPooling1D(pool_size=(2),padding='valid',strides=2)(x)
-    x = Convolution1D(filters=15, kernel_size=3, strides=1, activation='relu',kernel_initializer=KERNEL_INITIALIZER) (x)
-    x = MaxPooling1D(pool_size=(2),padding='valid',strides=2)(x)
-    x = Flatten()(x)
-    x = Dense(50, activation = 'relu', kernel_initializer=KERNEL_INITIALIZER)(x)
-    x = Dense(20, activation = 'relu', kernel_initializer=KERNEL_INITIALIZER)(x)
-    x = Dense(nclasses, activation = 'softmax', kernel_initializer=KERNEL_INITIALIZER)(x)
-    #create model
-    model = Model(inputs = x_input, outputs = x , name = 'eegseizure1')
-    return model
-
-def eegSeizureModel3(input_shape, nclasses):
-    x_input = Input(input_shape)    
-    x = Convolution1D(filters=8, kernel_size=11, strides=1, activation='relu', kernel_initializer=KERNEL_INITIALIZER) (x_input)
-    x = MaxPooling1D(pool_size=(2),padding='valid',strides=2)(x)
-    x = Convolution1D(filters=8, kernel_size=7, strides=1, activation='relu', kernel_initializer=KERNEL_INITIALIZER) (x)
-    x = MaxPooling1D(pool_size=(2),padding='valid',strides=2)(x)
-    x = Convolution1D(filters=16, kernel_size=5, strides=1, activation='relu', kernel_initializer=KERNEL_INITIALIZER) (x)
-    x = MaxPooling1D(pool_size=(2),padding='valid',strides=2)(x)
-    x = Convolution1D(filters=16, kernel_size=3, strides=1, activation='relu', kernel_initializer=KERNEL_INITIALIZER) (x)
-    x = MaxPooling1D(pool_size=(2),padding='valid',strides=2)(x)
-    x = Convolution1D(filters=32, kernel_size=3, strides=1, activation='relu',kernel_initializer=KERNEL_INITIALIZER) (x)
-    x = MaxPooling1D(pool_size=(2),padding='valid',strides=2)(x)
-    x = Convolution1D(filters=32, kernel_size=3, strides=1, activation='relu',kernel_initializer=KERNEL_INITIALIZER) (x)
-    x = MaxPooling1D(pool_size=(2),padding='valid',strides=2)(x)
-    x = Flatten()(x)
-    x = Dense(100, activation = 'relu', kernel_initializer=KERNEL_INITIALIZER)(x)
-    x = Dropout(DROPOUT_RATE)(x)
-    x = Dense(500, activation = 'relu', kernel_initializer=KERNEL_INITIALIZER)(x)
-    x = Dropout(DROPOUT_RATE)(x)
-    x = Dense(nclasses, activation = 'softmax', kernel_initializer=KERNEL_INITIALIZER)(x)
-    #create model
-    model = Model(inputs = x_input, outputs = x , name = 'eegseizure1')
-    return model
-
-
-def eegSeizureModel6(input_shape, nclasses):
-    x_input = Input(input_shape)    
-    x = Convolution1D(filters=8, kernel_size=11, strides=1, activation='relu', kernel_initializer=KERNEL_INITIALIZER) (x_input)
-    x = MaxPooling1D(pool_size=(2),padding='valid',strides=2)(x)
-    x = Convolution1D(filters=8, kernel_size=11, strides=1, activation='relu', kernel_initializer=KERNEL_INITIALIZER) (x)
-    x = MaxPooling1D(pool_size=(2),padding='valid',strides=2)(x)
-    x = Convolution1D(filters=16, kernel_size=11, strides=1, activation='relu', kernel_initializer=KERNEL_INITIALIZER) (x)
-    x = MaxPooling1D(pool_size=(2),padding='valid',strides=2)(x)
-    x = Convolution1D(filters=16, kernel_size=11, strides=1, activation='relu', kernel_initializer=KERNEL_INITIALIZER) (x)
-    x = MaxPooling1D(pool_size=(2),padding='valid',strides=2)(x)
-    x = Convolution1D(filters=32, kernel_size=11, strides=1, activation='relu',kernel_initializer=KERNEL_INITIALIZER) (x)
-    x = MaxPooling1D(pool_size=(2),padding='valid',strides=2)(x)
-    x = Convolution1D(filters=32, kernel_size=11, strides=1, activation='relu',kernel_initializer=KERNEL_INITIALIZER) (x)
-    x = MaxPooling1D(pool_size=(2),padding='valid',strides=2)(x)
-    x = Flatten()(x)
-    x = Dense(100, activation = 'relu', kernel_initializer=KERNEL_INITIALIZER)(x)
-    x = Dropout(DROPOUT_RATE)(x)
-    x = Dense(50, activation = 'relu', kernel_initializer=KERNEL_INITIALIZER)(x)
-    x = Dropout(DROPOUT_RATE)(x)
-    x = Dense(nclasses, activation = 'softmax', kernel_initializer=KERNEL_INITIALIZER)(x)
-    #create model
-    model = Model(inputs = x_input, outputs = x , name = 'eegseizure1')
-    return model
 
 ############    LA PRIMA DA PROVARE      #################
 
@@ -382,93 +258,17 @@ def saraCnn1(input_shape, nclasses):
     model = Model(inputs = x_input, outputs = x , name = 'eegseizure1')
     return model
 
-def saraCnn2(input_shape, nclasses):
-    x_input = Input(input_shape)    
-    x = Convolution1D(filters=16, kernel_size=11, strides=1, activation='relu', kernel_initializer=KERNEL_INITIALIZER) (x_input)
-    x = MaxPooling1D(pool_size=(4),padding='valid',strides=2)(x)
-    x = Convolution1D(filters=32, kernel_size=11, strides=1, activation='relu', kernel_initializer=KERNEL_INITIALIZER) (x)
-    x = MaxPooling1D(pool_size=(4),padding='valid',strides=2)(x)
-    x = Convolution1D(filters=64, kernel_size=11, strides=1, activation='relu', kernel_initializer=KERNEL_INITIALIZER) (x)
-    x = MaxPooling1D(pool_size=(4),padding='valid',strides=2)(x)
-    x = Convolution1D(filters=128, kernel_size=11, strides=1, activation='relu', kernel_initializer=KERNEL_INITIALIZER) (x)
-    x = MaxPooling1D(pool_size=(4),padding='valid',strides=2)(x)
-    x = Flatten()(x)
-    x = Dense(100, activation = 'relu', kernel_initializer=KERNEL_INITIALIZER)(x)
-    x = Dropout(DROPOUT_RATE)(x)
-    x = Dense(50, activation = 'relu', kernel_initializer=KERNEL_INITIALIZER)(x)
-    x = Dropout(DROPOUT_RATE)(x)
-    x = Dense(nclasses, activation = 'softmax', kernel_initializer=KERNEL_INITIALIZER)(x)
-    #create model
-    model = Model(inputs = x_input, outputs = x , name = 'eegseizure1')
-    return model
-
-def saraCNN3(input_shape, nclasses):
-    x_input = Input(input_shape)
-    x = Convolution1D(filters=32, kernel_size=32, strides=1, activation='relu', kernel_initializer=KERNEL_INITIALIZER, kernel_regularizer='l2') (x_input)
-    x = MaxPooling1D(pool_size=(4),padding='valid')(x)
-    x = Convolution1D(filters=16, kernel_size=16, strides=1, activation='relu', kernel_initializer=KERNEL_INITIALIZER, kernel_regularizer='l2') (x)
-    x = MaxPooling1D(pool_size=(4),padding='valid')(x)
-    x = Convolution1D(filters=16, kernel_size=8, strides=1, activation='relu', kernel_initializer=KERNEL_INITIALIZER, kernel_regularizer='l2') (x)
-    x = MaxPooling1D(pool_size=(2),padding='valid')(x)
-    x = Flatten()(x)
-    x = Dense(100, activation = 'relu', kernel_initializer=KERNEL_INITIALIZER)(x)
-    x = Dropout(DROPOUT_RATE)(x)
-    x = Dense(50, activation = 'relu', kernel_initializer=KERNEL_INITIALIZER)(x)
-    x = Dropout(DROPOUT_RATE)(x)
-    x = Dense(nclasses, activation = 'softmax', kernel_initializer=KERNEL_INITIALIZER)(x)
-    #create model
-    model = Model(inputs = x_input, outputs = x , name = 'saraCnn3')
-    return model
-
-def modelloLorenzo(input_shape,nclasses):
-    model = tf.keras.Sequential()
-    model.add(tf.keras.layers.Conv1D(32, 32, activation='relu', input_shape=input_shape, kernel_regularizer='l2'))
-    model.add(tf.keras.layers.MaxPool1D(pool_size=4))
-    model.add(tf.keras.layers.BatchNormalization(axis=1))
-    model.add(tf.keras.layers.Conv1D(16, 16, activation='relu', kernel_regularizer='l2'))
-    model.add(tf.keras.layers.MaxPool1D(pool_size=4))
-    model.add(tf.keras.layers.BatchNormalization(axis=1))
-    model.add(tf.keras.layers.Conv1D(16, 8, activation='relu', kernel_regularizer='l2'))
-    model.add(tf.keras.layers.MaxPool1D(pool_size=2))
-    model.add(tf.keras.layers.BatchNormalization(axis=1))
-    model.add(tf.keras.layers.GRU(16, dropout=0.5))
-    model.add(tf.keras.layers.Dense(nclasses, activation='sigmoid'))
-    return model
-
-def gruSara(input_shape,nclasses):
-    model = tf.keras.Sequential()
-    model.add(tf.keras.layers.Conv1D(16, 32, activation='relu', input_shape=input_shape, kernel_regularizer='l2'))
-    model.add(tf.keras.layers.MaxPool1D(pool_size=4))
-    #model.add(tf.keras.layers.BatchNormalization(axis=1))
-    model.add(tf.keras.layers.Conv1D(32, 16, activation='relu', kernel_regularizer='l2'))
-    model.add(tf.keras.layers.MaxPool1D(pool_size=4))
-    #model.add(tf.keras.layers.BatchNormalization(axis=1))
-    model.add(tf.keras.layers.Conv1D(64, 8, activation='relu', kernel_regularizer='l2'))
-    model.add(tf.keras.layers.MaxPool1D(pool_size=2))
-    model.add(tf.keras.layers.BatchNormalization(axis=1))
-    model.add(tf.keras.layers.GRU(16, dropout=0.5))
-    model.add(tf.keras.layers.Dense(nclasses, activation='sigmoid'))
-    return model
-
-
-
-#prendi dalle cartelle di controllo e di sepsi alcuni segnali per dividerli 
 
 
 
 # create train-validation splits for k-fold cross validation
-dataPaths = glob(os.path.join(f'{DATASETDIR}','train','sepsis','*.npz'))+ glob(os.path.join(f'{DATASETDIR}','train','control','*.npz'))
-#X_test = glob(os.path.join(f'{DATASETDIR}/test','*','*.npy'))
-#y_test = createLabels(X_test,CLASSES)
+dataPaths = glob(os.path.join(f'{DATASETDIR}','sepsis','*.npz'))+ glob(os.path.join(f'{DATASETDIR}','control','*.npz'))
+
 print(len(dataPaths))
 groups = get_id(dataPaths)
 groups = list(np.unique(groups))
-
-#l'ho commentato io perche per ora non penso che mi serva
-#if USE_LOSO:
-#  K = len(groups)
-
-#sub_ids = get_id(dataPaths)
+print(dataPaths)
+print(f"Number of data paths: {len(dataPaths)}")
 X_train_splits, y_train_splits, X_val_splits, y_val_splits = create_train_val_splits(dataPaths)
 
 accuracies = []
@@ -506,7 +306,7 @@ for i in range(0, K):
   tensorboard = LRTensorBoard(log_dir=os.path.join(LOGDIR,f'{i}fold'),histogram_freq=0)
 
   model_checkpoint = tf.keras.callbacks.ModelCheckpoint(
-    filepath=os.path.join(WEIGHTSDIR, f'{i}fold'),
+    filepath=os.path.join(WEIGHTSDIR, f'{i}fold.keras'),
     save_weights_only =False,
     monitor='val_loss',
     mode='auto',
