@@ -1,0 +1,290 @@
+class,subid,age,gender
+healthyControls,pleth13,53.0,F
+healthyControls,pleth15,29.0,M
+healthyControls,pleth18,47.0,M
+healthyControls,pleth38,50.0,F
+healthyControls,pleth39,26.0,F
+healthyControls,pleth40,48.0,F
+healthyControls,pleth41,29.0,M
+healthyControls,pleth42,59.0,F
+healthyControls,pleth43,43.0,M
+healthyControls,pleth44,28.0,M
+healthyControls,pleth45,29.0,F
+healthyControls,pleth46,46.0,F
+non septic,p027177,52.53,F
+non septic,p040132,52.21,F
+non septic,p041204,54.74,F
+non septic,p041705,56.69,F
+non septic,p042809,53.34,F
+non septic,p043383,50.86,F
+non septic,p043412,54.05,F
+non septic,p043671,56.34,F
+non septic,p044126,52.44,F
+non septic,p044922,59.41,F
+non septic,p046320,50.13,F
+non septic,p046884,55.05,F
+sepsis,p043412,54.05,F
+sepsis,p049375,58.37,F
+sepsis,p059726,51.98,F
+sepsis,p068806,52.06,F
+sepsis,p074937,50.24,F
+sepsis,p078325,50.73,F
+sepsis,p084078,53.62,F
+sepsis,p085700,58.97,F
+sepsis,p085700,58.97,F
+sepsis,p085700,58.97,F
+sepsis,p085700,58.97,F
+sepsis,p096066,57.38,F
+healthyControls,pleth13,53.0,F
+healthyControls,pleth15,29.0,M
+healthyControls,pleth18,47.0,M
+healthyControls,pleth38,50.0,F
+healthyControls,pleth39,26.0,F
+healthyControls,pleth40,48.0,F
+healthyControls,pleth41,29.0,M
+healthyControls,pleth42,59.0,F
+healthyControls,pleth43,43.0,M
+healthyControls,pleth44,28.0,M
+healthyControls,pleth45,29.0,F
+healthyControls,pleth46,46.0,F
+healthyControls,pleth47,33.0,M
+healthyControls,pleth106,62.0,F
+healthyControls,pleth107,39.0,M
+healthyControls,pleth108,62.0,F
+non septic,p040084,23.33,M
+non septic,p048667,28.84,M
+non septic,p048996,26.96,M
+non septic,p049138,26.49,M
+non septic,p050547,26.49,M
+non septic,p051964,29.28,M
+non septic,p052503,21.96,M
+non septic,p053283,22.93,M
+non septic,p053845,27.71,M
+non septic,p056409,20.54,M
+non septic,p057133,29.49,M
+non septic,p057507,29.99,M
+non septic,p059073,25.64,M
+non septic,p064771,20.07,M
+non septic,p064965,26.06,M
+non septic,p065175,22.91,M
+sepsis,p049138,26.49,M
+sepsis,p064965,26.06,M
+sepsis,p065915,27.96,M
+sepsis,p070651,26.88,M
+healthyControls,pleth13,53.0,F
+healthyControls,pleth15,29.0,M
+healthyControls,pleth18,47.0,M
+healthyControls,pleth38,50.0,F
+healthyControls,pleth39,26.0,F
+healthyControls,pleth40,48.0,F
+healthyControls,pleth41,29.0,M
+healthyControls,pleth42,59.0,F
+healthyControls,pleth43,43.0,M
+healthyControls,pleth44,28.0,M
+healthyControls,pleth45,29.0,F
+healthyControls,pleth46,46.0,F
+healthyControls,pleth47,33.0,M
+non septic,p040299,42.08,M
+non septic,p040715,40.63,M
+non septic,p041302,43.66,M
+non septic,p041619,49.4,M
+non septic,p041937,48.33,M
+non septic,p041982,46.84,M
+non septic,p042961,46.29,M
+non septic,p043731,41.98,M
+non septic,p044454,49.68,M
+non septic,p044808,45.4,M
+non septic,p046144,49.19,M
+non septic,p047582,48.59,M
+non septic,p048397,49.84,M
+sepsis,p041619,49.4,M
+sepsis,p048843,41.42,M
+sepsis,p050450,49.82,M
+sepsis,p054120,47.16,M
+sepsis,p062782,47.6,M
+sepsis,p066603,43.17,M
+sepsis,p069943,42.31,M
+sepsis,p070447,46.88,M
+sepsis,p071514,49.68,M
+sepsis,p074496,40.85,M
+sepsis,p079754,47.57,M
+sepsis,p080880,49.83,M
+sepsis,p081193,43.81,M
+healthyControls,pleth13,53.0,F
+healthyControls,pleth15,29.0,M
+healthyControls,pleth18,47.0,M
+healthyControls,pleth38,50.0,F
+healthyControls,pleth39,26.0,F
+healthyControls,pleth40,48.0,F
+healthyControls,pleth41,29.0,M
+healthyControls,pleth42,59.0,F
+healthyControls,pleth43,43.0,M
+healthyControls,pleth44,28.0,M
+healthyControls,pleth45,29.0,F
+healthyControls,pleth46,46.0,F
+healthyControls,pleth47,33.0,M
+healthyControls,pleth106,62.0,F
+healthyControls,pleth107,39.0,M
+healthyControls,pleth108,62.0,F
+healthyControls,pleth109,65.0,F
+healthyControls,pleth110,43.0,F
+healthyControls,pleth111,55.0,F
+healthyControls,pleth112,50.0,F
+healthyControls,pleth113,27.0,F
+non septic,p040689,48.11,F
+non septic,p041493,40.29,F
+non septic,p042782,47.69,F
+non septic,p045492,49.98,F
+non septic,p047884,48.07,F
+non septic,p048732,46.14,F
+non septic,p049038,43.68,F
+non septic,p049520,44.57,F
+non septic,p050094,41.15,F
+non septic,p050201,40.82,F
+non septic,p052207,40.11,F
+non septic,p055716,47.37,F
+non septic,p056027,43.68,F
+non septic,p056464,40.13,F
+non septic,p056620,46.29,F
+non septic,p057171,40.83,F
+non septic,p058817,41.32,F
+non septic,p059381,45.29,F
+non septic,p059789,49.96,F
+non septic,p060294,44.57,F
+non septic,p062393,46.96,F
+sepsis,p056620,46.29,F
+healthyControls,pleth13,53.0,F
+healthyControls,pleth15,29.0,M
+healthyControls,pleth18,47.0,M
+healthyControls,pleth38,50.0,F
+healthyControls,pleth39,26.0,F
+healthyControls,pleth40,48.0,F
+healthyControls,pleth41,29.0,M
+healthyControls,pleth42,59.0,F
+healthyControls,pleth43,43.0,M
+healthyControls,pleth44,28.0,M
+healthyControls,pleth45,29.0,F
+healthyControls,pleth46,46.0,F
+healthyControls,pleth47,33.0,M
+healthyControls,pleth106,62.0,F
+healthyControls,pleth107,39.0,M
+healthyControls,pleth108,62.0,F
+healthyControls,pleth109,65.0,F
+healthyControls,pleth110,43.0,F
+healthyControls,pleth111,55.0,F
+healthyControls,pleth112,50.0,F
+non septic,p040929,25.18,F
+non septic,p046427,26.2,F
+non septic,p049190,24.78,F
+non septic,p049881,22.58,F
+non septic,p053812,28.8,F
+non septic,p054703,22.08,F
+non septic,p054904,24.32,F
+non septic,p054968,22.75,F
+non septic,p055308,26.98,F
+non septic,p056285,28.38,F
+non septic,p058662,24.38,F
+non septic,p059844,19.29,F
+non septic,p064100,22.7,F
+non septic,p064839,21.48,F
+non septic,p067533,22.97,F
+non septic,p072040,28.13,F
+non septic,p083528,29.74,F
+non septic,p087858,23.57,F
+non septic,p089897,22.34,F
+non septic,p096006,26.41,F
+sepsis,p053812,28.8,F
+sepsis,p058662,24.38,F
+healthyControls,pleth13,53.0,F
+healthyControls,pleth15,29.0,M
+healthyControls,pleth18,47.0,M
+healthyControls,pleth38,50.0,F
+healthyControls,pleth39,26.0,F
+healthyControls,pleth40,48.0,F
+non septic,p044856,35.67,M
+non septic,p045580,30.79,M
+non septic,p047637,34.26,M
+non septic,p049261,37.1,M
+non septic,p049447,36.92,M
+non septic,p051390,31.34,M
+sepsis,p066067,31.09,M
+sepsis,p066851,38.58,M
+healthyControls,pleth13,53.0,F
+healthyControls,pleth15,29.0,M
+healthyControls,pleth18,47.0,M
+healthyControls,pleth38,50.0,F
+non septic,p010075,62.96,F
+non septic,p017218,69.36,F
+non septic,p028461,65.95,F
+non septic,p030101,87.86,F
+sepsis,p030101,87.86,F
+sepsis,p044653,63.26,F
+sepsis,p044806,74.91,F
+sepsis,p046429,81.81,F
+healthyControls,pleth13,53.0,F
+healthyControls,pleth15,29.0,M
+healthyControls,pleth18,47.0,M
+healthyControls,pleth38,50.0,F
+healthyControls,pleth39,26.0,F
+healthyControls,pleth40,48.0,F
+non septic,p040724,37.06,F
+non septic,p046132,38.33,F
+non septic,p046262,36.0,F
+non septic,p046775,34.61,F
+non septic,p049482,33.67,F
+non septic,p056858,36.9,F
+sepsis,p040724,37.06,F
+sepsis,p046262,36.0,F
+sepsis,p046775,34.61,F
+sepsis,p079297,35.08,F
+healthyControls,pleth13,53.0,F
+healthyControls,pleth15,29.0,M
+healthyControls,pleth18,47.0,M
+healthyControls,pleth38,50.0,F
+healthyControls,pleth39,26.0,F
+healthyControls,pleth40,48.0,F
+healthyControls,pleth41,29.0,M
+healthyControls,pleth42,59.0,F
+healthyControls,pleth43,43.0,M
+healthyControls,pleth44,28.0,M
+healthyControls,pleth45,29.0,F
+healthyControls,pleth46,46.0,F
+healthyControls,pleth47,33.0,M
+healthyControls,pleth106,62.0,F
+non septic,p040057,53.92,M
+non septic,p040334,56.57,M
+non septic,p040566,50.92,M
+non septic,p041050,58.01,M
+non septic,p041863,56.24,M
+non septic,p042519,52.75,M
+non septic,p042926,59.29,M
+non septic,p042950,54.22,M
+non septic,p043089,53.66,M
+non septic,p043400,53.52,M
+non septic,p043632,54.24,M
+non septic,p043649,54.11,M
+non septic,p043837,53.92,M
+non septic,p044058,53.28,M
+sepsis,p053348,57.39,M
+sepsis,p054872,59.73,M
+sepsis,p055393,59.82,M
+sepsis,p058475,53.35,M
+sepsis,p063187,53.14,M
+sepsis,p066228,59.38,M
+sepsis,p071059,53.48,M
+sepsis,p071862,59.26,M
+sepsis,p072328,56.58,M
+sepsis,p073299,54.45,M
+sepsis,p077242,54.21,M
+sepsis,p079372,53.58,M
+sepsis,p079671,56.76,M
+sepsis,p080644,58.65,M
+healthyControls,pleth13,53.0,F
+healthyControls,pleth15,29.0,M
+healthyControls,pleth18,47.0,M
+non septic,p05685,74.5,M
+non septic,p022942,63.76,M
+non septic,p026502,79.7,M
+sepsis,p040472,79.95,M
+sepsis,p040798,64.97,M
+sepsis,p041588,83.97,M

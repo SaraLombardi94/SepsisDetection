@@ -1,3 +1,6 @@
 /data/rawSignals
 /articoli utili
 /modelli
+/data/datasets/healthy-nonseptic-sepsis/control
+/data/datasets/healthy-nonseptic-sepsis/sepsis
+/data/datasets/healthy-nonseptic-sepsis/nonseptic
