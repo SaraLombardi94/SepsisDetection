@@ -28,19 +28,20 @@ from tensorflow.keras.layers import LSTM, TimeDistributed
 from tensorflow.keras.callbacks import TensorBoard, ModelCheckpoint
 from tensorflow.keras.callbacks import ReduceLROnPlateau, LearningRateScheduler
 import matplotlib.pyplot as plt
-from tensorflow.keras.layers import Input, LSTM, Dense, Dropout
-from tensorflow.keras.initializers import GlorotUniform
+from keras.regularizers import l1_l2
+
+
 #constants
 FS = 125
 N_CLASSES = 2 # control, sepsis
-LR = 1e-4
-BATCH_SIZE = 32
-EPOCHS = 100
-K = 2
+LR = 1e-6
+BATCH_SIZE = 128
+EPOCHS = 200
+K = 3
 NSAMPLES = FS*30
 WINDOW_LENGTH = FS * 60 * 1 
 NORMRANGE = (-1,1)
-NORMALIZE = False
+NORMALIZE = True
 USE_SHUFFLE = True
 USE_WINDOWS = True
 USE_JITTER = False
@@ -51,13 +52,13 @@ BUFFER_SHUFFLING_SIZE = 180
 KERNEL_INITIALIZER='glorot_uniform'
 LOSSFUNCTION = tf.keras.losses.BinaryCrossentropy()
 OPTIMIZER = tf.keras.optimizers.Adam(learning_rate=LR)
-MODELNAME = f'{K}fold_dsTM2min30_saraCnn1_seed1024_nonsepticseptic_mse_bs{BATCH_SIZE}_lre{LR}_windows{WINDOW_LENGTH}onset_jitter{USE_JITTER}_ep{EPOCHS}_1'
+MODELNAME = f'{K}fold_dsTM2min30_saraCnn1Enhanced_mse_bs{BATCH_SIZE}_lre{LR}_windows{WINDOW_LENGTH}onset_jitter{USE_JITTER}_ep{EPOCHS}_1'
 
-MODELDIR = r'C:\Users\Utente\Desktop\nuovi segnali\healthy-nonseptic-sepsis\healthy-nonseptic-sepsis\modelli'
-DATASETDIR = r'C:\Users\Utente\Desktop\nuovi segnali\healthy-nonseptic-sepsis\healthy-nonseptic-sepsis'
+MODELDIR = r'C:\Users\Utente\Desktop\Repository GitHub\tesi magistrale\modelli'
+DATASETDIR = r'C:\Users\Utente\Desktop\rawSignals\rawSignals'
 LOGDIR = os.path.join(MODELDIR,MODELNAME,'logs')
 WEIGHTSDIR = os.path.join(MODELDIR,MODELNAME,'weights')
-CLASSES = ['nonseptic_normalized','sepsis_normalized']
+CLASSES = ['control','sepsis']
 #PRETRAINED_MODELPATH = '/Users/saralombardi/Desktop/COVID/pre-trainedsepsi'
 
 class LRTensorBoard(TensorBoard):
@@ -80,7 +81,7 @@ class LRTensorBoard(TensorBoard):
 def createLabels(data,classes):
   labels = []
   for filepath in data:
-    group = filepath.split(os.path.sep)[-3]
+    group = filepath.split(os.path.sep)[-2]
     if group in CLASSES:
       class_num = CLASSES.index(group)
       labels.append(class_num)
@@ -185,12 +186,6 @@ def create_train_val_splits(train_paths):
 
 
 
-#####cambiare questa sopra per eliminare la cross validation ########### 
-
-
-
-
-
 def create_dataset(X_train, y_train, X_val, y_val):
 
   ds_train = tf.data.Dataset.from_tensor_slices((X_train, y_train))
@@ -265,7 +260,6 @@ def saraCnn1(input_shape, nclasses):
     model = Model(inputs = x_input, outputs = x , name = 'eegseizure1')
     return model
 
-
 def saraCnnEnhanced(input_shape, nclasses):
     x_input = Input(input_shape)
     
@@ -307,57 +301,84 @@ def saraCnnEnhanced(input_shape, nclasses):
     model = Model(inputs=x_input, outputs=x, name='Enhanced_saraCnn')
     return model
 
-def simplifiedSaraCnn1(input_shape, nclasses, KERNEL_INITIALIZER='glorot_uniform', DROPOUT_RATE=0.5):
-    x_input = Input(input_shape)    
-    x = Convolution1D(filters=32, kernel_size=11, strides=2, activation='relu', kernel_initializer=KERNEL_INITIALIZER)(x_input)
-    x = MaxPooling1D(pool_size=4, padding='valid', strides=2)(x)
-    x = Convolution1D(filters=64, kernel_size=11, strides=2, activation='relu', kernel_initializer=KERNEL_INITIALIZER)(x)
-    x = MaxPooling1D(pool_size=4, padding='valid', strides=2)(x)
-    x = Flatten()(x)
-    x = Dense(50, activation='relu', kernel_initializer=KERNEL_INITIALIZER)(x)
-    x = Dropout(DROPOUT_RATE)(x)
-    x = Dense(nclasses, activation='softmax', kernel_initializer=KERNEL_INITIALIZER)(x)
-    model = Model(inputs=x_input, outputs=x, name='simplified_eegseizure1')
-    return model
-
-def ultraSimplifiedSaraCnn1(input_shape, nclasses, KERNEL_INITIALIZER='glorot_uniform', DROPOUT_RATE=0.5):
-    x_input = Input(input_shape)    
-    x = Convolution1D(filters=16, kernel_size=11, strides=2, activation='relu', kernel_initializer=KERNEL_INITIALIZER)(x_input)
-    x = MaxPooling1D(pool_size=4, padding='valid', strides=2)(x)
-    x = Flatten()(x)
-    x = Dense(nclasses, activation='softmax', kernel_initializer=KERNEL_INITIALIZER)(x)
-    model = Model(inputs=x_input, outputs=x, name='ultraSimplified_eegseizure1')
-    return model
-
-
-
-def saraRNN1(input_shape, nclasses):
+def saraCnnEnhancedRegularized(input_shape, nclasses):
     x_input = Input(input_shape)
+    
+    # Primo blocco convoluzionale con Batch Normalization e MaxPooling
+    x = Convolution1D(filters=64, kernel_size=11, strides=1, padding='same', kernel_initializer='he_uniform',
+                      kernel_regularizer=l1_l2(l1=0.01, l2=0.01))(x_input)
+    x = BatchNormalization()(x)
+    x = Activation('relu')(x)
+    x = MaxPooling1D(pool_size=4, strides=2, padding='valid')(x)
+    
+    # Secondo blocco convoluzionale con Batch Normalization e AveragePooling
+    x = Convolution1D(filters=128, kernel_size=7, strides=1, padding='same', kernel_initializer='he_uniform',
+                      kernel_regularizer=l1_l2(l1=0.01, l2=0.01))(x)
+    x = BatchNormalization()(x)
+    x = Activation('relu')(x)
+    x = AveragePooling1D(pool_size=4, strides=2, padding='valid')(x)
+    
+    # Terzo blocco convoluzionale con Batch Normalization e MaxPooling
+    x = Convolution1D(filters=256, kernel_size=5, strides=1, padding='same', kernel_initializer='he_uniform',
+                      kernel_regularizer=l1_l2(l1=0.01, l2=0.01))(x)
+    x = BatchNormalization()(x)
+    x = Activation('relu')(x)
+    x = MaxPooling1D(pool_size=4, strides=2, padding='valid')(x)
+    
+    # Quarto blocco convoluzionale con Batch Normalization e AveragePooling
+    x = Convolution1D(filters=256, kernel_size=5, strides=1, padding='same', kernel_initializer='he_uniform',
+                      kernel_regularizer=l1_l2(l1=0.01, l2=0.01))(x)
+    x = BatchNormalization()(x)
+    x = Activation('relu')(x)
+    x = AveragePooling1D(pool_size=4, strides=2, padding='valid')(x)
 
-    # Definizione degli strati LSTM
-    x = LSTM(64, return_sequences=True, kernel_initializer=GlorotUniform())(x_input)
-    x = Dropout(0.5)(x)
-    x = LSTM(64, return_sequences=True, kernel_initializer=GlorotUniform())(x)
-    x = Dropout(0.5)(x)
-    x = LSTM(128, return_sequences=True, kernel_initializer=GlorotUniform())(x)
-    x = Dropout(0.5)(x)
-    x = LSTM(128, return_sequences=False, kernel_initializer=GlorotUniform())(x)  # return_sequences=False per preparare l'uscita all'ultimo layer Dense
-
-    # Aggiunta dei livelli fully connected
-    x = Dense(100, activation='relu', kernel_initializer=GlorotUniform())(x)
-    x = Dropout(0.5)(x)
-    x = Dense(50, activation='relu', kernel_initializer=GlorotUniform())(x)
-    x = Dropout(0.5)(x)
-
+    # Appiattimento e strati fully connected con Dropout aumentato
+    x = Flatten()(x)
+    x = Dense(256, activation='relu', kernel_initializer='he_uniform', kernel_regularizer=l1_l2(l1=0.01, l2=0.01))(x)
+    x = Dropout(0.6)(x)  # Aumentato il tasso di dropout
+    x = Dense(128, activation='relu', kernel_initializer='he_uniform', kernel_regularizer=l1_l2(l1=0.01, l2=0.01))(x)
+    x = Dropout(0.6)(x)  # Aumentato il tasso di dropout
+    
     # Strato di output
-    x = Dense(nclasses, activation='softmax', kernel_initializer=GlorotUniform())(x)
-
+    x = Dense(nclasses, activation='softmax', kernel_initializer='he_uniform')(x)
+    
     # Creazione del modello
-    model = Model(inputs=x_input, outputs=x, name='eegseizure_rnn1')
+    model = Model(inputs=x_input, outputs=x, name='Enhanced_saraCnn_Regularized')
     return model
+
+####### RRN ###############
+def build_custom_rnn_model(input_shape, nclasses):
+    model = Sequential([
+        Dense(32, activation='relu', input_shape=input_shape),
+        BatchNormalization(),
+        LSTM(32, return_sequences=True),
+        Dropout(0.5),
+        LSTM(32, return_sequences=True),
+        Dropout(0.5),
+        LSTM(32, return_sequences=False),
+        Dropout(0.5),
+        Dense(nclasses, activation='softmax')
+    ])
+
+    model.compile(optimizer='adam',
+                  loss='categorical_crossentropy',
+                  metrics=['accuracy'])
+    
+    return model
+
+#################################
+
+
+
+
+
+
+
+
+
 
 # create train-validation splits for k-fold cross validation
-dataPaths = glob(os.path.join(f'{DATASETDIR}','sepsis_normalized','seed1024','*.npz'))+ glob(os.path.join(f'{DATASETDIR}','nonseptic_normalized','seed1024','*.npz'))
+dataPaths = glob(os.path.join(f'{DATASETDIR}','sepsis','*.npz'))+ glob(os.path.join(f'{DATASETDIR}','control','*.npz'))
 
 print(len(dataPaths))
 groups = get_id(dataPaths)

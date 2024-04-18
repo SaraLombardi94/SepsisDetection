@@ -28,17 +28,16 @@ from tensorflow.keras.layers import LSTM, TimeDistributed
 from tensorflow.keras.callbacks import TensorBoard, ModelCheckpoint
 from tensorflow.keras.callbacks import ReduceLROnPlateau, LearningRateScheduler
 import matplotlib.pyplot as plt
-from tensorflow.keras.layers import Input, LSTM, Dense, Dropout
-from tensorflow.keras.initializers import GlorotUniform
+
 #constants
 FS = 125
 N_CLASSES = 2 # control, sepsis
 LR = 1e-4
-BATCH_SIZE = 32
+BATCH_SIZE = 1
 EPOCHS = 100
 K = 2
 NSAMPLES = FS*30
-WINDOW_LENGTH = FS * 60 * 1 
+WINDOW_LENGTH = FS * 30 * 1 
 NORMRANGE = (-1,1)
 NORMALIZE = False
 USE_SHUFFLE = True
@@ -51,13 +50,13 @@ BUFFER_SHUFFLING_SIZE = 180
 KERNEL_INITIALIZER='glorot_uniform'
 LOSSFUNCTION = tf.keras.losses.BinaryCrossentropy()
 OPTIMIZER = tf.keras.optimizers.Adam(learning_rate=LR)
-MODELNAME = f'{K}fold_dsTM2min30_saraCnn1_seed1024_nonsepticseptic_mse_bs{BATCH_SIZE}_lre{LR}_windows{WINDOW_LENGTH}onset_jitter{USE_JITTER}_ep{EPOCHS}_1'
+MODELNAME = f'{K}fold_dsTM2min30_saraCnn1_mse_bs{BATCH_SIZE}_lre{LR}_windows{WINDOW_LENGTH}onset_jitter{USE_JITTER}_ep{EPOCHS}_1'
 
 MODELDIR = r'C:\Users\Utente\Desktop\nuovi segnali\healthy-nonseptic-sepsis\healthy-nonseptic-sepsis\modelli'
 DATASETDIR = r'C:\Users\Utente\Desktop\nuovi segnali\healthy-nonseptic-sepsis\healthy-nonseptic-sepsis'
 LOGDIR = os.path.join(MODELDIR,MODELNAME,'logs')
 WEIGHTSDIR = os.path.join(MODELDIR,MODELNAME,'weights')
-CLASSES = ['nonseptic_normalized','sepsis_normalized']
+CLASSES = ['control','sepsis']
 #PRETRAINED_MODELPATH = '/Users/saralombardi/Desktop/COVID/pre-trainedsepsi'
 
 class LRTensorBoard(TensorBoard):
@@ -91,7 +90,7 @@ def normalize(x):
    return x
 
 ###  AGGIUSTATA  #####
-def load_and_select_window(filepath, y):
+def load_and_select_window_original(filepath, y):
     # Assicurati che filepath sia una stringa
     filepath = tf.compat.as_str_any(filepath)
     # Costruisci il percorso per i punti di inizio basato sul percorso del file originale
@@ -111,7 +110,29 @@ def load_and_select_window(filepath, y):
     y = to_categorical(y, num_classes=len(CLASSES))
     return signal_data, y
 
+def load_and_select_window(filepath, y):
 
+
+    # Assicurati che filepath sia una stringa
+    filepath = tf.compat.as_str_any(filepath)
+    # Costruisci il percorso per i punti di inizio basato sul percorso del file originale
+    pathToPoints = filepath.removesuffix('.npz') + '.txt'
+    # Carica l'elenco dei punti di inizio
+    onsetList = np.loadtxt(pathToPoints).astype(np.int64)
+    # Filtra i punti di inizio che permettono una finestra completa
+    signal_data = np.load(filepath)['arr_0'].astype('float64')
+    max_index = signal_data.shape[0] - WINDOW_LENGTH
+    valid_onsetList = onsetList[onsetList <= max_index]
+
+    # Scegli un punto di inizio casuale dai punti validi
+    start_timestep = random.choice(valid_onsetList)
+    signal_data = np.reshape(signal_data, [signal_data.size, 1])
+    if NORMALIZE:
+        signal_data = normalize(signal_data)
+    if USE_WINDOWS:
+        signal_data = signal_data[start_timestep:start_timestep + WINDOW_LENGTH]
+    y = to_categorical(y, num_classes=len(CLASSES))
+    return signal_data, y
 
 ######################
 
@@ -185,7 +206,26 @@ def create_train_val_splits(train_paths):
 
 
 
-#####cambiare questa sopra per eliminare la cross validation ########### 
+def create_in_memory_datasets(X_train_paths, y_train_labels, X_val_paths, y_val_labels):
+    # Carica e trasforma i dati di training
+    X_train = [load_and_select_window(path,y_train_labels) for path in X_train_paths]
+    X_train_tensor = tf.convert_to_tensor(X_train, dtype=tf.float32)
+    y_train_tensor = tf.convert_to_tensor(y_train_labels, dtype=tf.float32)
+    
+    # Carica e trasforma i dati di validazione
+    X_val = [load_and_select_window(path,y_val_labels) for path in X_val_paths]
+    X_val_tensor = tf.convert_to_tensor(X_val, dtype=tf.float32)
+    y_val_tensor = tf.convert_to_tensor(y_val_labels, dtype=tf.float32)
+    
+    # Crea il dataset di training
+    ds_train = tf.data.Dataset.from_tensor_slices((X_train_tensor, y_train_tensor))
+    ds_train = ds_train.shuffle(buffer_size=len(X_train_paths)).batch(BATCH_SIZE)
+    
+    # Crea il dataset di validazione
+    ds_val = tf.data.Dataset.from_tensor_slices((X_val_tensor, y_val_tensor))
+    ds_val = ds_val.batch(BATCH_SIZE)  # Solitamente non si mescola il dataset di validazione
+    
+    return ds_train, ds_val
 
 
 
@@ -196,47 +236,17 @@ def create_dataset(X_train, y_train, X_val, y_val):
   ds_train = tf.data.Dataset.from_tensor_slices((X_train, y_train))
   ds_valid = tf.data.Dataset.from_tensor_slices((X_val, y_val))
   
-
   # Train dataset
   ds_train = ds_train.map(lambda filepath, label : tf.numpy_function(
         load_and_select_window, [filepath, label], (tf.double, tf.float32)))
-# =============================================================================
-  # if USE_WINDOWS:
-  #       ds_train = ds_train.map(lambda filepath, label: tf.numpy_function(
-  #       random_window, [filepath, label, onsetList], (tf.double, tf.float32)))
-#   if NORMALIZE:
-#   ds_train = ds_train.map(lambda filepath, label: tf.numpy_function(
-#         normalize, [filepath, label], (tf.double, tf.float32)))
-# 
-# =============================================================================
-  
   ds_train = ds_train.cache()
-  if USE_SHUFFLE:
-    ds_train = ds_train.shuffle(BUFFER_SHUFFLING_SIZE)
-
-  if USE_JITTER:
-    ds_train = ds_train.map(lambda x, y: tf.numpy_function(
-            jitter, [x, y], (tf.double, tf.float32)))
-    ds_train = ds_train.map(lambda x, y: tf.numpy_function(
-            normalize, [x, y], (tf.double, tf.float32)))
   ds_train = ds_train.batch(BATCH_SIZE)
   ds_train = ds_train.map(fix_shape)
 
   # Validation dataset
   ds_valid = ds_valid.map(lambda filepath, label: tf.numpy_function(
         load_and_select_window, [filepath, label], (tf.double, tf.float32)))
-  
-# =============================================================================
-  # if USE_WINDOWS:
-  #      ds_valid = ds_valid.map(lambda filepath, label: tf.numpy_function(
-  #      random_window, [filepath, label], (tf.double, tf.float32)))
-# 
-#   ds_valid = ds_valid.map(lambda filepath, label: tf.numpy_function(
-#         normalize, [filepath, label], (tf.double, tf.float32)))
-# =============================================================================
-  
   ds_valid = ds_valid.cache()
-
   ds_valid = ds_valid.batch(BATCH_SIZE)
   ds_valid = ds_valid.map(fix_shape)
   return ds_train, ds_valid
@@ -265,48 +275,6 @@ def saraCnn1(input_shape, nclasses):
     model = Model(inputs = x_input, outputs = x , name = 'eegseizure1')
     return model
 
-
-def saraCnnEnhanced(input_shape, nclasses):
-    x_input = Input(input_shape)
-    
-    # Primo blocco convoluzionale con Batch Normalization e MaxPooling
-    x = Convolution1D(filters=64, kernel_size=11, strides=1, padding='same', kernel_initializer='he_uniform')(x_input)
-    x = BatchNormalization()(x)
-    x = Activation('relu')(x)
-    x = MaxPooling1D(pool_size=4, strides=2, padding='valid')(x)
-    
-    # Secondo blocco convoluzionale con Batch Normalization e AveragePooling
-    x = Convolution1D(filters=128, kernel_size=7, strides=1, padding='same', kernel_initializer='he_uniform')(x)
-    x = BatchNormalization()(x)
-    x = Activation('relu')(x)
-    x = AveragePooling1D(pool_size=4, strides=2, padding='valid')(x)
-    
-    # Terzo blocco convoluzionale con Batch Normalization e MaxPooling
-    x = Convolution1D(filters=256, kernel_size=5, strides=1, padding='same', kernel_initializer='he_uniform')(x)
-    x = BatchNormalization()(x)
-    x = Activation('relu')(x)
-    x = MaxPooling1D(pool_size=4, strides=2, padding='valid')(x)
-    
-    # Quarto blocco convoluzionale con Batch Normalization e AveragePooling
-    x = Convolution1D(filters=256, kernel_size=5, strides=1, padding='same', kernel_initializer='he_uniform')(x)
-    x = BatchNormalization()(x)
-    x = Activation('relu')(x)
-    x = AveragePooling1D(pool_size=4, strides=2, padding='valid')(x)
-
-    # Appiattimento e strati fully connected con Dropout
-    x = Flatten()(x)
-    x = Dense(256, activation='relu', kernel_initializer='he_uniform')(x)
-    x = Dropout(0.5)(x)
-    x = Dense(128, activation='relu', kernel_initializer='he_uniform')(x)
-    x = Dropout(0.5)(x)
-    
-    # Strato di output
-    x = Dense(nclasses, activation='softmax', kernel_initializer='he_uniform')(x)
-    
-    # Creazione del modello
-    model = Model(inputs=x_input, outputs=x, name='Enhanced_saraCnn')
-    return model
-
 def simplifiedSaraCnn1(input_shape, nclasses, KERNEL_INITIALIZER='glorot_uniform', DROPOUT_RATE=0.5):
     x_input = Input(input_shape)    
     x = Convolution1D(filters=32, kernel_size=11, strides=2, activation='relu', kernel_initializer=KERNEL_INITIALIZER)(x_input)
@@ -329,35 +297,8 @@ def ultraSimplifiedSaraCnn1(input_shape, nclasses, KERNEL_INITIALIZER='glorot_un
     model = Model(inputs=x_input, outputs=x, name='ultraSimplified_eegseizure1')
     return model
 
-
-
-def saraRNN1(input_shape, nclasses):
-    x_input = Input(input_shape)
-
-    # Definizione degli strati LSTM
-    x = LSTM(64, return_sequences=True, kernel_initializer=GlorotUniform())(x_input)
-    x = Dropout(0.5)(x)
-    x = LSTM(64, return_sequences=True, kernel_initializer=GlorotUniform())(x)
-    x = Dropout(0.5)(x)
-    x = LSTM(128, return_sequences=True, kernel_initializer=GlorotUniform())(x)
-    x = Dropout(0.5)(x)
-    x = LSTM(128, return_sequences=False, kernel_initializer=GlorotUniform())(x)  # return_sequences=False per preparare l'uscita all'ultimo layer Dense
-
-    # Aggiunta dei livelli fully connected
-    x = Dense(100, activation='relu', kernel_initializer=GlorotUniform())(x)
-    x = Dropout(0.5)(x)
-    x = Dense(50, activation='relu', kernel_initializer=GlorotUniform())(x)
-    x = Dropout(0.5)(x)
-
-    # Strato di output
-    x = Dense(nclasses, activation='softmax', kernel_initializer=GlorotUniform())(x)
-
-    # Creazione del modello
-    model = Model(inputs=x_input, outputs=x, name='eegseizure_rnn1')
-    return model
-
 # create train-validation splits for k-fold cross validation
-dataPaths = glob(os.path.join(f'{DATASETDIR}','sepsis_normalized','seed1024','*.npz'))+ glob(os.path.join(f'{DATASETDIR}','nonseptic_normalized','seed1024','*.npz'))
+dataPaths = glob(os.path.join(f'{DATASETDIR}','sepsis','seed4','*.npz'))+ glob(os.path.join(f'{DATASETDIR}','control','seed4','*.npz'))
 
 print(len(dataPaths))
 groups = get_id(dataPaths)
@@ -365,7 +306,7 @@ groups = list(np.unique(groups))
 print(dataPaths)
 print(f"Number of data paths: {len(dataPaths)}")
 X_train_splits, y_train_splits, X_val_splits, y_val_splits = create_train_val_splits(dataPaths)
-
+print(len(dataPaths))
 accuracies = []
 losses = []
 print(f'Running {K}-Fold Cross Validation')
@@ -392,7 +333,7 @@ for i in range(0, K):
   else:
     INPUT_SHAPE = (NSAMPLES,1)
   # CREATE AND COMPILE MODEL
-  model = saraCnnEnhanced(input_shape = INPUT_SHAPE, nclasses = len(CLASSES))
+  model = ultraSimplifiedSaraCnn1(input_shape = INPUT_SHAPE, nclasses = len(CLASSES))
   model.summary()
   model.compile(optimizer=OPTIMIZER,loss=LOSSFUNCTION, metrics=['accuracy'])
 
