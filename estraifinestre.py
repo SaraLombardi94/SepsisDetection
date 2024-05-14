@@ -90,13 +90,18 @@ def envelopePPG(sig, distance=PWD_MIN):
     # plt.show()
     return l_x, u_x
 
-sampleDir = r'D:/phD_Sara/tesiPaolo/SepsisDetection/data/rawSignals/sepsis'
-outputDir = r'D:/phD_Sara/tesiPaolo/SepsisDetection/data/rawSignals/minimiSespis'
-samples = glob(os.path.join(sampleDir,'*.npz'))
+baseDir = r'C:\Users\Utente\Desktop\wetransfer_controls-microcirculation_2024-04-23_1250\controls-microcirculation\tf\microcirculation_seed4'
+outputDir = r'C:\Users\Utente\Desktop\wetransfer_controls-microcirculation_2024-04-23_1250\controls-microcirculation\tf\microcirculation_seed4'
+#samples = glob(os.path.join(sampleDir,'*.npz'))
+
+seeds = ['seed4', 'seed24', 'seed42', 'seed56', 'seed100', 'seed128', 'seed256', 'seed384', 'seed536', 'seed1024']
 
 
-
-
+# Cicla su tutte le cartelle seed
+#for seed in seeds:
+#    sampleDir = os.path.join(baseDir, seed)
+#    outputDir = sampleDir  # Salva l'output nella stessa cartella di input
+samples = glob(os.path.join(baseDir, '*.npz'))
 for samplePath in samples:
     filename = samplePath.split(os.path.sep)[-1].removesuffix('.npz')
     file = np.load(samplePath)['arr_0'].flatten()

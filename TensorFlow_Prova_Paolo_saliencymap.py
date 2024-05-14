@@ -1,10 +1,8 @@
 # -*- coding: utf-8 -*-
-
-
 """
-Created on Tue Aug 30 08:53:12 2022
+Created on Tue Apr 23 12:00:17 2024
 
-@author: saralombardi
+@author: Utente
 """
 
 import random
@@ -28,19 +26,21 @@ from tensorflow.keras.layers import LSTM, TimeDistributed
 from tensorflow.keras.callbacks import TensorBoard, ModelCheckpoint
 from tensorflow.keras.callbacks import ReduceLROnPlateau, LearningRateScheduler
 import matplotlib.pyplot as plt
-from tensorflow.keras.layers import Input, LSTM, Dense, Dropout, Bidirectional
+from tensorflow.keras.layers import Input, LSTM, Dense, Dropout
 from tensorflow.keras.initializers import GlorotUniform
+import matplotlib.pyplot as plt
+
 #constants
 FS = 125
-N_CLASSES = 2 # control, sepsis 
+N_CLASSES = 2 # control, sepsis
 LR = 1e-4
-BATCH_SIZE = 32   #aggiornamento dei pesi della rete 
-EPOCHS = 150
-K = 5
+BATCH_SIZE = 8
+EPOCHS = 50
+K = 2
 NSAMPLES = FS*30
 WINDOW_LENGTH = FS * 30 * 1 
 NORMRANGE = (-1,1)
-NORMALIZE = True
+NORMALIZE = False
 USE_SHUFFLE = True
 USE_WINDOWS = True
 USE_JITTER = False
@@ -49,15 +49,15 @@ DROPOUT_RATE = 0.2
 RANDOM_STATE = 12
 BUFFER_SHUFFLING_SIZE = 180
 KERNEL_INITIALIZER='glorot_uniform'
-LOSSFUNCTION = tf.keras.losses.BinaryCrossentropy()
+LOSSFUNCTION = tf.keras.losses.MeanSquaredError()
 OPTIMIZER = tf.keras.optimizers.Adam(learning_rate=LR)
-MODELNAME = f'{K}fold_dsTM2min30_gru_plus_adjusted_mse_bs{BATCH_SIZE}_lre{LR}_windows{WINDOW_LENGTH}onset_jitter{USE_JITTER}_ep{EPOCHS}_1'
+MODELNAME = f'{K}fold_dsTM2min30_saraCnn1_seed1024_nonsepticseptic_mse_bs{BATCH_SIZE}_lre{LR}_windows{WINDOW_LENGTH}onset_jitter{USE_JITTER}_ep{EPOCHS}_1'
 
-MODELDIR = r'C:\Users\Utente\Desktop\wetransfer_controls-microcirculation_2024-04-23_1250\controls-microcirculation\tf_bilanciato\modelli'
-DATASETDIR = r'C:\Users\Utente\Desktop\wetransfer_controls-microcirculation_2024-04-23_1250\controls-microcirculation\tf_bilanciato'
+MODELDIR = r'C:\Users\Utente\Desktop\nuovi segnali\healthy-nonseptic-sepsis\healthy-nonseptic-sepsis\modelli'
+DATASETDIR = r'C:\Users\Utente\Desktop\nuovi segnali\healthy-nonseptic-sepsis\healthy-nonseptic-sepsis'
 LOGDIR = os.path.join(MODELDIR,MODELNAME,'logs')
 WEIGHTSDIR = os.path.join(MODELDIR,MODELNAME,'weights')
-CLASSES = ['control','microcirculation']
+CLASSES = ['control_normalized','sepsis_normalized']
 #PRETRAINED_MODELPATH = '/Users/saralombardi/Desktop/COVID/pre-trainedsepsi'
 
 class LRTensorBoard(TensorBoard):
@@ -80,7 +80,7 @@ class LRTensorBoard(TensorBoard):
 def createLabels(data,classes):
   labels = []
   for filepath in data:
-    group = filepath.split(os.path.sep)[-2]
+    group = filepath.split(os.path.sep)[-3]
     if group in CLASSES:
       class_num = CLASSES.index(group)
       labels.append(class_num)
@@ -356,116 +356,10 @@ def saraRNN1(input_shape, nclasses):
     model = Model(inputs=x_input, outputs=x, name='eegseizure_rnn1')
     return model
 
-def build_brnn_model(input_shape, nclasses):
-    model = Sequential()
-    model.add(Bidirectional(LSTM(64, return_sequences=True), input_shape=input_shape))
-    model.add(Dropout(0.5))
-    model.add(Bidirectional(LSTM(32)))
-    model.add(Dropout(0.5))
-    model.add(Dense(64, activation='relu'))
-    model.add(Dense(nclasses, activation='softmax'))
-
-    model.compile(optimizer='adam', loss='categorical_crossentropy', metrics=['accuracy'])
-    return model
- 
-
-def gruSara(input_shape,nclasses):
-    model = tf.keras.Sequential()
-    model.add(tf.keras.layers.Conv1D(16, 32, activation='relu', input_shape=input_shape, kernel_regularizer='l2'))
-    model.add(tf.keras.layers.MaxPool1D(pool_size=4))
-    #model.add(tf.keras.layers.BatchNormalization(axis=1))
-    model.add(tf.keras.layers.Conv1D(32, 16, activation='relu', kernel_regularizer='l2'))
-    model.add(tf.keras.layers.MaxPool1D(pool_size=4))
-    #model.add(tf.keras.layers.BatchNormalization(axis=1))
-    model.add(tf.keras.layers.Conv1D(64, 8, activation='relu', kernel_regularizer='l2'))
-    model.add(tf.keras.layers.MaxPool1D(pool_size=2))
-    model.add(tf.keras.layers.BatchNormalization(axis=1))
-    model.add(tf.keras.layers.GRU(16, dropout=0.5))
-    model.add(tf.keras.layers.Dense(nclasses, activation='sigmoid'))
-    return model
-
-def gruSara_plus(input_shape, nclasses):
-    model = tf.keras.Sequential()
-    # Layer convoluzionali iniziali
-    model.add(tf.keras.layers.Conv1D(16, 32, activation='relu', input_shape=input_shape, kernel_regularizer='l2'))
-    model.add(tf.keras.layers.MaxPool1D(pool_size=4))
-    model.add(tf.keras.layers.Conv1D(32, 16, activation='relu', kernel_regularizer='l2'))
-    model.add(tf.keras.layers.MaxPool1D(pool_size=4))
-    model.add(tf.keras.layers.Conv1D(64, 8, activation='relu', kernel_regularizer='l2'))
-    model.add(tf.keras.layers.MaxPool1D(pool_size=2))
-    model.add(tf.keras.layers.BatchNormalization())
-
-    # Aggiunta di ulteriori layer convoluzionali
-    model.add(tf.keras.layers.Conv1D(128, 4, activation='relu', kernel_regularizer='l2'))
-    model.add(tf.keras.layers.MaxPool1D(pool_size=2))
-
-    # GRU e layer densamente connessi
-    model.add(tf.keras.layers.GRU(16, dropout=0.5, return_sequences=False))  # 'return_sequences=False' per prepararsi al Dense
-    model.add(tf.keras.layers.Dense(nclasses, activation='sigmoid'))
-
-    return model
-
-def gruSara_plus_adjusted(input_shape, nclasses):
-    model = tf.keras.Sequential()
-    # Layer convoluzionali iniziali
-    model.add(tf.keras.layers.Conv1D(16, 32, activation='relu', input_shape=input_shape, kernel_regularizer='l2'))
-    model.add(tf.keras.layers.MaxPool1D(pool_size=4))
-    model.add(tf.keras.layers.Conv1D(32, 16, activation='relu', kernel_regularizer='l2'))
-    model.add(tf.keras.layers.MaxPool1D(pool_size=4))
-    model.add(tf.keras.layers.Conv1D(64, 8, activation='relu', kernel_regularizer='l2'))
-    model.add(tf.keras.layers.MaxPool1D(pool_size=2))
-    model.add(tf.keras.layers.BatchNormalization())
-
-    # Nuovo layer convoluzionale aggiunto
-    model.add(tf.keras.layers.Conv1D(64, 16, activation='relu', kernel_regularizer='l2'))  # Filtro più grande
-    model.add(tf.keras.layers.MaxPool1D(pool_size=2))
-
-    # Aggiunta di ulteriori layer convoluzionali esistenti
-    model.add(tf.keras.layers.Conv1D(128, 4, activation='relu', kernel_regularizer='l2'))
-    model.add(tf.keras.layers.MaxPool1D(pool_size=2))
-
-    # Nuovo layer GRU con più unità
-    model.add(tf.keras.layers.GRU(32, dropout=0.5, return_sequences=False))  # Più unità GRU
-
-    # Layer densamente connesso finale
-    model.add(tf.keras.layers.Dense(nclasses, activation='sigmoid'))
-
-    return model
-
-
-def gruSara_plus_adjusted_64(input_shape, nclasses):
-    model = tf.keras.Sequential()
-    # Layer convoluzionali iniziali
-    model.add(tf.keras.layers.Conv1D(16, 32, activation='relu', input_shape=input_shape, kernel_regularizer='l2'))
-    model.add(tf.keras.layers.MaxPool1D(pool_size=4))
-    model.add(tf.keras.layers.Conv1D(32, 16, activation='relu', kernel_regularizer='l2'))
-    model.add(tf.keras.layers.MaxPool1D(pool_size=4))
-    model.add(tf.keras.layers.Conv1D(64, 8, activation='relu', kernel_regularizer='l2'))
-    model.add(tf.keras.layers.MaxPool1D(pool_size=2))
-    model.add(tf.keras.layers.BatchNormalization())
-
-    # Nuovo layer convoluzionale aggiunto
-    model.add(tf.keras.layers.Conv1D(64, 16, activation='relu', kernel_regularizer='l2'))  # Filtro più grande
-    model.add(tf.keras.layers.MaxPool1D(pool_size=2))
-
-    # Aggiunta di ulteriori layer convoluzionali esistenti
-    model.add(tf.keras.layers.Conv1D(128, 4, activation='relu', kernel_regularizer='l2'))
-    model.add(tf.keras.layers.MaxPool1D(pool_size=2))
-
-    # Nuovo layer GRU con più unità
-    model.add(tf.keras.layers.GRU(64, dropout=0.5, return_sequences=False))  # Più unità GRU
-
-    # Layer densamente connesso finale
-    model.add(tf.keras.layers.Dense(nclasses, activation='sigmoid'))
-
-    return model
-
-
-
 
 
 # create train-validation splits for k-fold cross validation
-dataPaths = glob(os.path.join(f'{DATASETDIR}','control','*.npz'))+ glob(os.path.join(f'{DATASETDIR}','microcirculation','*.npz'))
+dataPaths = glob(os.path.join(f'{DATASETDIR}','sepsis_normalized','seed4','*.npz'))+ glob(os.path.join(f'{DATASETDIR}','control_normalized','seed4','*.npz'))
 
 print(len(dataPaths))
 groups = get_id(dataPaths)
@@ -500,7 +394,7 @@ for i in range(0, K):
   else:
     INPUT_SHAPE = (NSAMPLES,1)
   # CREATE AND COMPILE MODEL
-  model = gruSara_plus_adjusted(input_shape = INPUT_SHAPE, nclasses = len(CLASSES))
+  model = saraCnn1(input_shape = INPUT_SHAPE, nclasses = len(CLASSES))
   model.summary()
   model.compile(optimizer=OPTIMIZER,loss=LOSSFUNCTION, metrics=['accuracy'])
 
@@ -560,8 +454,11 @@ print(f'Mean accuracy is : {np.mean(accuracies)}')
 print(f'Mean loss is : {np.mean(losses)}')
 
 
-##########saliency map #########
-sample_signal, classe = load_and_select_window('C:/Users/Utente/Desktop/wetransfer_controls-microcirculation_2024-04-23_1250/controls-microcirculation/tf_bilanciato/microcirculation/plre90.npy_#99.npz',1)
+
+
+#Preparo un segnale per valutare quale parte prende per capire di che classe fa parte
+
+sample_signal, classe = load_and_select_window('C:/Users/Utente/Desktop/nuovi segnali/healthy-nonseptic-sepsis/healthy-nonseptic-sepsis/control_normalized/seed4/plre13.npy_#last.npz',0)
 
 # Assumi che 'model' sia il tuo modello già addestrato e 'sample_signal' sia un segnale PPG che hai già preparato e normalizzato
 sample_signal = tf.convert_to_tensor(sample_signal, dtype=tf.float32)

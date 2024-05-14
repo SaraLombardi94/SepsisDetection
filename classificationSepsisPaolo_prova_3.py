@@ -233,12 +233,12 @@ def create_confusion_matrix(y,y_pred, classes):
 
 
 # Carica il dataset
-df = load_dataset(r'C:/Users/Utente/Desktop/Repository GitHub/tesi magistrale/data/all_features_with_subid.xlsx')
+df = load_dataset(r'C:/Users/Utente/Downloads/expModelDataset_seed4_control60 _2classi.xlsx')
 # Riempi i valori mancanti con la media della colonna
 fill_missing_values(df)
-X = df.drop(columns=['label', 'nome_segnale', 'SubId','R2_of_fit'])
-y = df['label']
-groups = df['SubId']  # Colonna SubId per i gruppi
+X = df.drop(columns=['class', 'subject_id'])
+y = df['class']
+groups = df['subject_id']  # Colonna SubId per i gruppi
 
 
 # Definisci il numero di fold
@@ -297,7 +297,7 @@ for fold, (train_index, test_index) in enumerate(group_kfold.split(X, y, groups)
 #### SCELTA DEGLI IPERPARAMETRI PER OGNI FOLD ####
 
     # Utilizza la cross-validation interna per selezionare gli iperparametri
-    best_model, best_params = perform_nested_cv('mlp',X_train_std, y_train)
+    best_model, best_params = perform_nested_cv('xgboost',X_train_std, y_train)
     print(f"Migliori parametri: {best_params}")
     
 #### ADDESTRAMENTO DEL MODELLO ####

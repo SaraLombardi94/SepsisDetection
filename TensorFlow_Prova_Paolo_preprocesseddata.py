@@ -32,9 +32,9 @@ import matplotlib.pyplot as plt
 #constants
 FS = 125
 N_CLASSES = 2 # control, sepsis
-LR = 1e-4
-BATCH_SIZE = 1
-EPOCHS = 100
+LR = 1e-6
+BATCH_SIZE = 16
+EPOCHS = 50
 K = 2
 NSAMPLES = FS*30
 WINDOW_LENGTH = FS * 30 * 1 
@@ -52,8 +52,8 @@ LOSSFUNCTION = tf.keras.losses.BinaryCrossentropy()
 OPTIMIZER = tf.keras.optimizers.Adam(learning_rate=LR)
 MODELNAME = f'{K}fold_dsTM2min30_saraCnn1_mse_bs{BATCH_SIZE}_lre{LR}_windows{WINDOW_LENGTH}onset_jitter{USE_JITTER}_ep{EPOCHS}_1'
 
-MODELDIR = r'C:\Users\Utente\Desktop\nuovi segnali\healthy-nonseptic-sepsis\healthy-nonseptic-sepsis\modelli'
-DATASETDIR = r'C:\Users\Utente\Desktop\nuovi segnali\healthy-nonseptic-sepsis\healthy-nonseptic-sepsis'
+MODELDIR = r'C:\Users\Utente\Desktop\nuovi segnali preprocessed\modelli'
+DATASETDIR = r'C:\Users\Utente\Desktop\nuovi segnali preprocessed\wetransfer_preprocessingofdata-py_2024-04-23_0732\pre-processed'
 LOGDIR = os.path.join(MODELDIR,MODELNAME,'logs')
 WEIGHTSDIR = os.path.join(MODELDIR,MODELNAME,'weights')
 CLASSES = ['control','sepsis']
@@ -298,7 +298,7 @@ def ultraSimplifiedSaraCnn1(input_shape, nclasses, KERNEL_INITIALIZER='glorot_un
     return model
 
 # create train-validation splits for k-fold cross validation
-dataPaths = glob(os.path.join(f'{DATASETDIR}','sepsis','seed4','*.npz'))+ glob(os.path.join(f'{DATASETDIR}','control','seed4','*.npz'))
+dataPaths = glob(os.path.join(f'{DATASETDIR}','sepsis','seed4','*.npz'))+ glob(os.path.join(f'{DATASETDIR}','control','all','*.npz'))
 
 print(len(dataPaths))
 groups = get_id(dataPaths)

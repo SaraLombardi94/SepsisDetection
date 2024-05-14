@@ -6,7 +6,7 @@ Created on Tue Feb 13 11:20:25 2024
 """
 
 import pandas as pd
-dataset = pd.read_excel(r"C:/Users/Utente/Desktop/Repository GitHub/tesi magistrale/data/risultati_mediana_per_paziente_sepsi.xlsx")
+dataset = pd.read_excel(r"C:/Users/Utente/Downloads/expModelDataset_seed4_control60.xlsx")
 def remove_outliers(dataset):
     # Seleziona solo le colonne delle features, escludendo la prima colonna
     features = dataset.iloc[:, 1:]
@@ -36,5 +36,7 @@ dataset_senza_outliers = remove_outliers(dataset)
 
 
 # Salva il DataFrame in un file Excel
-dataset_senza_outliers.to_excel(r"C:/Users/Utente/Desktop/Repository GitHub/tesi magistrale/data/risultati_mediana_per_paziente_sepsi_nooutliers.xlsx", index=False)
+dataset_senza_outliers.to_excel(r"C:/Users/Utente/Downloads/expModelDataset_seed4_control60_nooutliers.xlsx", index=False)
 # Imposta index=False se non vuoi includere gli indici nel file Excel
+
+

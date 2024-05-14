@@ -30,7 +30,7 @@ import pandas as pd
 import seaborn as sns
 
 FS=125
-CLASSES = ['controls','target']
+CLASSES = ['control','microcirculation']
 N_FOLD = 5
 BATCH_SIZE = 32
 N_CLASSES = 2
@@ -38,8 +38,8 @@ NORMRANGE = (-1,1)
 NORMALIZE = True
 WINDOW_LENGTH = FS * 30 * 1 
 USE_WINDOWS = True
-modelDir = r"D:\phD_Sara\models\control_target\sara1cnn_6\weights"
-valtxtDir = r"D:\phD_Sara\models\control_target\sara1cnn_6\logs"
+modelDir = r"C:\Users\Utente\Desktop\wetransfer_controls-microcirculation_2024-04-23_1250\controls-microcirculation\tf_bilanciato\modelli\5fold_dsTM2min30_gru_plus_adjusted_64_mse_bs32_lre0.0001_windows3750onset_jitterFalse_ep150_1\weights"
+valtxtDir = r"C:\Users\Utente\Desktop\wetransfer_controls-microcirculation_2024-04-23_1250\controls-microcirculation\tf_bilanciato\modelli\5fold_dsTM2min30_gru_plus_adjusted_64_mse_bs32_lre0.0001_windows3750onset_jitterFalse_ep150_1\logs"
 
 def createLabels(data,classes):
   labels = []
@@ -100,12 +100,6 @@ def create_dataset(X_val, y_val):
   ds_valid = ds_valid.map(lambda filepath, label: tf.numpy_function(
         load_and_select_window, [filepath, label], (tf.double, tf.float32)))
   
-# =============================================================================
-# 
-#   ds_valid = ds_valid.map(lambda filepath, label: tf.numpy_function(
-#         normalize, [filepath, label], (tf.double, tf.float32)))
-# =============================================================================
-  
   ds_valid = ds_valid.cache()
 
   ds_valid = ds_valid.batch(BATCH_SIZE)
@@ -148,8 +142,32 @@ def create_confusion_matrix(y,y_pred,classLabel):
   print(f'Precision is {100*PPV:0.2f}%')
   return cm
 
+
+def plot_saliency_map(model, x, y_true, correct):
+    x_tensor = tf.convert_to_tensor(x.reshape(1, *x.shape), dtype=tf.float32)
+    with tf.GradientTape() as tape:
+        tape.watch(x_tensor)
+        y_pred = model(x_tensor, training=False)
+        loss = tf.keras.losses.categorical_crossentropy(y_true.reshape(1, -1), y_pred)
+    
+    gradients = tape.gradient(loss, x_tensor)
+    gradients = tf.reduce_mean(tf.abs(gradients), axis=0).numpy().flatten()
+    
+    plt.figure(figsize=(10, 4))
+    plt.subplot(1, 2, 1)
+    plt.plot(x.flatten())
+    plt.title('Original Signal')
+    
+    plt.subplot(1, 2, 2)
+    plt.plot(gradients, color='green' if correct else 'red')
+    plt.title('Saliency Map')
+    plt.show()
+
+
+
+
 for fold in range(N_FOLD):
-    modelPath = os.path.join(modelDir,f"{fold}fold",f"{fold}fold_best.keras")
+    modelPath = os.path.join(modelDir,f"{fold}fold.keras")
     txtData = os.path.join(valtxtDir,f"{fold}fold",f"X_val{fold}.txt")
     val_paths = np.loadtxt(txtData,dtype="str",comments=None)
     y_val = createLabels(val_paths,CLASSES)
@@ -162,8 +180,11 @@ for fold in range(N_FOLD):
     wrong_predictions = val_paths[indexes]
     print(wrong_predictions)
     
-    
-    
-    
+    # Visualizza la saliency map per tutti i segnali
+    for idx, path in enumerate(val_paths):
+        x, _ = load_and_select_window(path, y_val[idx])  # Carica il segnale
+        y_true = to_categorical([y_val[idx]], num_classes=len(CLASSES))  # Converte in one-hot
+        correct = y_val[idx] == y_pred_class[idx]  # Determina se la classificazione è stata corretta
+        plot_saliency_map(model, x, y_true, correct)
     
     
