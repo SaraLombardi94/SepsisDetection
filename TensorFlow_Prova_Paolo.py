@@ -432,6 +432,73 @@ def gruSara_plus_adjusted(input_shape, nclasses):
 
     return model
 
+def gruSara1_plus_attention(input_shape, nclasses):
+    inputs = tf.keras.Input(shape=input_shape)
+
+    # Layer convoluzionali iniziali
+    x = tf.keras.layers.Conv1D(16, 32, activation='relu', kernel_regularizer='l2')(inputs)
+    x = tf.keras.layers.MaxPool1D(pool_size=4)(x)
+    x = tf.keras.layers.Conv1D(32, 16, activation='relu', kernel_regularizer='l2')(x)
+    x = tf.keras.layers.MaxPool1D(pool_size=4)(x)
+    x = tf.keras.layers.Conv1D(64, 8, activation='relu', kernel_regularizer='l2')(x)
+    x = tf.keras.layers.MaxPool1D(pool_size=2)(x)
+    x = tf.keras.layers.BatchNormalization()(x)
+
+    # Nuovo layer convoluzionale aggiunto
+    x = tf.keras.layers.Conv1D(64, 16, activation='relu', kernel_regularizer='l2')(x)
+    x = tf.keras.layers.MaxPool1D(pool_size=2)(x)
+
+    # Aggiunta di ulteriori layer convoluzionali esistenti
+    x = tf.keras.layers.Conv1D(128, 4, activation='relu', kernel_regularizer='l2')(x)
+    x = tf.keras.layers.MaxPool1D(pool_size=2)(x)
+
+    # Nuovo layer GRU con più unità
+    x = tf.keras.layers.GRU(64, dropout=0.5, return_sequences=True)(x)
+
+    # Layer di attenzione
+    attention_output = tf.keras.layers.Attention()([x,x])
+    x = tf.keras.layers.Flatten()(attention_output)
+    # Layer densamente connesso finale
+    outputs = tf.keras.layers.Dense(nclasses, activation='sigmoid')(x)
+
+    model = tf.keras.Model(inputs, outputs)
+
+    return model
+
+
+def gruSara_plus_attention(input_shape, nclasses):
+    inputs = tf.keras.Input(shape=input_shape)
+
+    # Layer convoluzionali iniziali
+    x = tf.keras.layers.Conv1D(16, 32, activation='relu', kernel_regularizer='l2')(inputs)
+    x = tf.keras.layers.MaxPool1D(pool_size=4)(x)
+    x = tf.keras.layers.Conv1D(32, 16, activation='relu', kernel_regularizer='l2')(x)
+    x = tf.keras.layers.MaxPool1D(pool_size=4)(x)
+    x = tf.keras.layers.Conv1D(64, 8, activation='relu', kernel_regularizer='l2')(x)
+    x = tf.keras.layers.MaxPool1D(pool_size=2)(x)
+    x = tf.keras.layers.BatchNormalization()(x)
+
+    # Nuovo layer convoluzionale aggiunto
+    x = tf.keras.layers.Conv1D(64, 16, activation='relu', kernel_regularizer='l2')(x)
+    x = tf.keras.layers.MaxPool1D(pool_size=2)(x)
+
+    # Aggiunta di ulteriori layer convoluzionali esistenti
+    x = tf.keras.layers.Conv1D(128, 4, activation='relu', kernel_regularizer='l2')(x)
+    x = tf.keras.layers.MaxPool1D(pool_size=2)(x)
+
+    # Nuovo layer GRU con più unità
+    x = tf.keras.layers.GRU(64, dropout=0.5, return_sequences=True)(x)
+
+    # Layer di attenzione
+    attention_output = tf.keras.layers.Attention()([x,x])
+    x = tf.keras.layers.Flatten()(attention_output)
+    # Layer densamente connesso finale
+    outputs = tf.keras.layers.Dense(nclasses, activation='sigmoid')(x)
+
+    model = tf.keras.Model(inputs, outputs)
+
+    return model
+
 
 def gruSara_plus_adjusted_64(input_shape, nclasses):
     model = tf.keras.Sequential()
