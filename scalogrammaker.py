@@ -15,13 +15,22 @@ import ssqueezepy as sp
 from scipy.signal import cwt, morlet
 from PIL import Image
 import io
-
-
+import random
+import sklearn
+from tensorflow.keras.utils import to_categorical
+from sklearn.model_selection import KFold, train_test_split, GroupShuffleSplit, StratifiedGroupKFold, GroupKFold
+from sklearn import preprocessing
+from sklearn.utils import shuffle
 
 f = 125 #frequenza di campionamento
 t_sample = 1/f #tempo di campionamento
 n_samples = f*30 #numero di campioni considerato del segnale discreto
-
+NORMALIZE = True
+NORMRANGE = (-1,1)
+USE_WINDOWS = True
+USE_SCALOGRAM = True
+WINDOW_LENGTH = 125 * 30 * 1
+CLASSES = ['control', 'microcirculation']
 
 input_cartella = r'C:\Users\Utente\Desktop\minidataset\control'
 output_cartella = r'C:\Users\Utente\Desktop\wetransfer_controls-microcirculation_2024-04-23_1250\controls-microcirculation\scalogrammi\control'
@@ -36,6 +45,86 @@ def sottrai_media(lista):
     mean_value = np.mean(lista)
     nuova_lista = np.array([valore - mean_value for valore in lista])
     return nuova_lista
+
+def compute_scalogram(x,y):
+    tf.print("ok")
+    # Calcola lo scalogramma
+    Wx, scales, _ = sp.cwt(x, 'morlet', scales='log', derivative=False, nv=32)
+    Wx = np.abs(Wx)
+    return Wx,y 
+        
+
+def convert_to_image_and_label(Wx, label):
+    Wx_with_channel = Wx[:, :, np.newaxis]
+    # Duplica i canali per creare un'immagine RGB
+    Wx_rgb = np.concatenate([Wx_with_channel]*3, axis=-1)
+    tf.print(f"{Wx_rgb.shape}_conv")
+    
+    # Converti l'array in un'immagine PIL
+    image_rgb = tf.keras.utils.array_to_img(Wx_rgb)
+    
+    # Converti l'immagine PIL in un Tensor TensorFlow
+    #image_tensor = tf.convert_to_tensor(np.array(image_rgb), dtype=tf.float32)
+    #tf.print(f"{image_tensor.shape}_conv")
+    return image_rgb, label
+
+
+
+def normalize(x):
+    x = sklearn.preprocessing.minmax_scale(x, feature_range=NORMRANGE)
+    return x
+
+
+
+        
+def load_and_select_window_with_scalogram(filepath, y):
+    filepath = tf.compat.as_str_any(filepath)
+    pathToPoints = filepath.removesuffix('.npz') + '.txt'
+    onsetList = np.loadtxt(pathToPoints).astype(np.int64)
+    start_timestep = random.choice(onsetList)
+    signal_data = np.load(filepath)['arr_0'].astype('float64')
+    #signal_data = np.reshape(signal_data, [signal_data.size, 1])
+    tf.print(f"{signal_data.shape}_inizio")
+    if NORMALIZE:
+        signal_data = normalize(signal_data)
+    
+    if USE_WINDOWS:
+        tf.print(f'{USE_WINDOWS}')
+        while (signal_data[start_timestep:]).size < WINDOW_LENGTH:
+            start_timestep = random.choice(onsetList)
+        signal_data = signal_data[start_timestep:start_timestep + WINDOW_LENGTH]
+    
+    y = to_categorical(y, num_classes=len(CLASSES))
+    
+    tf.print(f"{signal_data.shape}_finestrato")
+    # Compute scalogram
+    Wx, scales, _ = sp.cwt(signal_data, 'morlet', scales='log', derivative=False, nv=32)
+    Wx = np.abs(Wx)
+    # Convert to image
+    Wx_with_channel = Wx[:, :, np.newaxis]
+    Wx_rgb = np.concatenate([Wx_with_channel]*3, axis=-1)
+    
+    tf.print(f"{Wx_rgb.shape}_conv")
+    # Converti l'array in un'immagine PIL
+    image_rgb = tf.keras.utils.array_to_img(Wx_rgb)
+    #image_tensor = tf.convert_to_tensor(np.array(image_rgb), dtype=tf.float32)
+    return image_rgb, y     
+
+    
+img, classe = load_and_select_window_with_scalogram(r'C:/Users/Utente/Desktop/minidataset/control/plre121.npy_#268.npz',0)
+
+plt.figure(figsize=(10, 6))
+# plt.subplot(1, 2, 1)
+# plt.title('Scalogramma (Wx_with_channels)')
+# plt.imshow(Wx_with_channels[:, :, 0], aspect='auto',cmap='gray')
+  
+plt.subplot(1, 2, 2)
+plt.title('Scalogramma RGB (Wx_rgb)')
+plt.imshow(img, aspect='auto')
+plt.show()
+
+
+
 
 
 
@@ -52,58 +141,20 @@ for nome_file_npz in os.listdir(input_cartella):
         dati_npz.files
         sig = dati_npz['arr_0'] #trasformo il segnale in una lista di valori
         sig = sig[:n_samples]
-        
-        Wx, scales, c = sp.cwt(sig, 'morlet', scales='log', derivative=False,nv=32)
-        Wx=np.abs(Wx)
-        
-        
-        Wx_with_channels= Wx[:, :, np.newaxis]
-        Wx_rgb = np.concatenate([Wx_with_channels]*3, axis=-1)
+        tf.print(f'{sig.shape}_conv')
+        Wx, label = compute_scalogram(sig,y=1)
         
         
-        plt.title('Scalogramma')
-        plt.imshow(image)
+        Wx_rgb , label =convert_to_image_and_label(Wx, label)
+        
+        #Wx_rgb = (Wx_rgb - Wx_rgb.min()) / (Wx_rgb.max() - Wx_rgb.min())
+        
+        plt.figure(figsize=(10, 6))
+        # plt.subplot(1, 2, 1)
+        # plt.title('Scalogramma (Wx_with_channels)')
+        # plt.imshow(Wx_with_channels[:, :, 0], aspect='auto',cmap='gray')
+  
+        plt.subplot(1, 2, 2)
+        plt.title('Scalogramma RGB (Wx_rgb)')
+        plt.imshow(Wx_rgb, aspect='auto')
         plt.show()
-        
-        # # Salva il plot in un buffer utilizzando BytesIO
-        # buf = io.BytesIO()
-        # plt.savefig(buf, format='png',transparent=False)
-        # plt.close()
-        # buf.seek(0)  # Muovi il puntatore all'inizio del file
-      
-        # # Usa Pillow per aprire l'immagine dal buffer
-        # image = Image.open(buf)
-        
-        # # Forza la conversione a RGB per rimuovere il canale alpha
-        # rgb_image = image.convert('RGB')
-        
-        # # Converte l'immagine in un array NumPy
-        # image_array = np.array(rgb_image)
-        
-        
-        # #pulisci il buffer se non lo usi piu
-        # buf.close()
-        
-        #fare operazioni con image_array
-        
-        
-        '''
-        ###### prima di fare la trasformata, elimino la componente continua ######
-        sig_dyn = sottrai_media(sig)
-        #### trasformata di Fourier ######
-        sig_ft = fftpack.fft(sig_dyn)
-        Amplitude = np.abs(sig_ft) #trovo l'ampiezza della trasformata in ogni punto
-        Amplitude = np.log(Amplitude + 1)  # Aggiungiamo 1 per evitare il logaritmo di zero
-        sample_freq = fftpack.fftfreq(sig.size, d=t_sample) # per trovare la frequenza ad ogni campione, devo passare all'interno della funzione fftfreq sia la dimensione del segnale che il tempo di campionamento del segnale stesso
-        # Visualizzazione del risultato
-        plt.figure(figsize=(10, 4))
-        plt.plot(sample_freq, Amplitude)
-        plt.title('FFT del Segnale')
-        plt.xlabel('Frequenza (Hz)')
-        plt.ylabel('Log Magnitude')
-        plt.grid(True)
-        plt.show()
-        '''
-        
-        
-        
