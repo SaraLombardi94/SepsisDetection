@@ -21,6 +21,8 @@ from tensorflow.keras.utils import to_categorical
 from sklearn.model_selection import KFold, train_test_split, GroupShuffleSplit, StratifiedGroupKFold, GroupKFold
 from sklearn import preprocessing
 from sklearn.utils import shuffle
+from scipy.ndimage import zoom
+
 
 f = 125 #frequenza di campionamento
 t_sample = 1/f #tempo di campionamento
@@ -29,14 +31,14 @@ NORMALIZE = True
 NORMRANGE = (-1,1)
 USE_WINDOWS = True
 USE_SCALOGRAM = True
+RESIZE_IMG = True
 WINDOW_LENGTH = 125 * 30 * 1
 CLASSES = ['control', 'microcirculation']
 
 input_cartella = r'C:\Users\Utente\Desktop\minidataset\control'
 output_cartella = r'C:\Users\Utente\Desktop\wetransfer_controls-microcirculation_2024-04-23_1250\controls-microcirculation\scalogrammi\control'
 
-# Definizione delle scale per la CWT
-#custom_scales = np.arange(41, 125)#○,3159,dtype='float64')  # Gli intervalli di scale possono essere adattati a seconda delle necessità
+
 
 
 
@@ -74,7 +76,14 @@ def normalize(x):
     x = sklearn.preprocessing.minmax_scale(x, feature_range=NORMRANGE)
     return x
 
-
+def resize_array(array, target_height, target_width):
+    # Calculate the zoom factors for height and width
+    zoom_factors = (target_height / array.shape[0], target_width / array.shape[1], 1)
+    
+    # Use scipy.ndimage.zoom to resize the array
+    resized_array = zoom(array, zoom_factors, order=1)  # Use order=1 for bilinear interpolation
+    
+    return resized_array
 
         
 def load_and_select_window_with_scalogram(filepath, y):
@@ -106,12 +115,18 @@ def load_and_select_window_with_scalogram(filepath, y):
     
     tf.print(f"{Wx_rgb.shape}_conv")
     # Converti l'array in un'immagine PIL
-    image_rgb = tf.keras.utils.array_to_img(Wx_rgb)
-    #image_tensor = tf.convert_to_tensor(np.array(image_rgb), dtype=tf.float32)
-    return image_rgb, y     
-
+    image_rgb = Wx_rgb.astype(np.float32)
     
-img, classe = load_and_select_window_with_scalogram(r'C:/Users/Utente/Desktop/minidataset/control/plre121.npy_#268.npz',0)
+    if RESIZE_IMG:
+        resized_image = resize_array(image_rgb, 224, 224)
+        return resized_image, y
+    else:    
+        return image_rgb, y
+
+
+
+
+img, classe  = load_and_select_window_with_scalogram(r'C:/Users/Utente/Desktop/minidataset/control/plre121.npy_#268.npz',0)
 
 plt.figure(figsize=(10, 6))
 # plt.subplot(1, 2, 1)
@@ -124,16 +139,10 @@ plt.imshow(img, aspect='auto')
 plt.show()
 
 
-
-
-
-
+'''
 # Itera attraverso i percorsi dei file NPZ
 for nome_file_npz in os.listdir(input_cartella):
     if 'npz' in nome_file_npz:
-        
-        
-        
         
         percorso_file_npz = os.path.join(input_cartella, nome_file_npz)
         # Carica il file NPZ
@@ -158,3 +167,9 @@ for nome_file_npz in os.listdir(input_cartella):
         plt.title('Scalogramma RGB (Wx_rgb)')
         plt.imshow(Wx_rgb, aspect='auto')
         plt.show()
+
+
+'''    
+
+
+
