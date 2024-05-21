@@ -20,7 +20,7 @@ from sklearn.utils import shuffle
 from scipy.fft import fft
 #model
 from tensorflow.keras.models import Model, Sequential
-from tensorflow.keras.layers import Input, Add, Dense, BatchNormalization, Activation, Dropout, Flatten
+from tensorflow.keras.layers import Input, Add, Dense, BatchNormalization, Activation, Dropout, Flatten, GlobalAveragePooling2D
 from tensorflow.keras.layers import Convolution1D, ZeroPadding1D, MaxPooling1D, AveragePooling1D
 from tensorflow.keras.layers import LSTM, TimeDistributed
 from tensorflow.keras.callbacks import TensorBoard, ModelCheckpoint
@@ -29,11 +29,12 @@ import matplotlib.pyplot as plt
 from tensorflow.keras.layers import Input, LSTM, Dense, Dropout, Bidirectional
 from tensorflow.keras.initializers import GlorotUniform
 import ssqueezepy as sp
+from scipy.ndimage import zoom
 #constants
 FS = 125
 N_CLASSES = 2 # control, sepsis 
-LR = 1e-4
-BATCH_SIZE = 32   #aggiornamento dei pesi della rete 
+LR = 1e-3
+BATCH_SIZE = 8   #aggiornamento dei pesi della rete 
 EPOCHS = 150
 K = 5
 NSAMPLES = FS*30
@@ -45,13 +46,14 @@ USE_WINDOWS = True
 USE_JITTER = False
 USE_LOSO = False
 USE_SCALOGRAM = True
+RESIZE_IMG = False
 DROPOUT_RATE = 0.2
 RANDOM_STATE = 12
 BUFFER_SHUFFLING_SIZE = 180
 KERNEL_INITIALIZER='glorot_uniform'
 LOSSFUNCTION = tf.keras.losses.BinaryCrossentropy()
 OPTIMIZER = tf.keras.optimizers.Adam(learning_rate=LR)
-MODELNAME = f'{K}fold_dsTM2min30_gru_plus_adjusted_mse_bs{BATCH_SIZE}_lre{LR}_windows{WINDOW_LENGTH}onset_jitter{USE_JITTER}_ep{EPOCHS}_1'
+MODELNAME = f'{K}fold_dsTM2min30_Prova_scalogrammi_MobileNet_3_mse_bs{BATCH_SIZE}_lre{LR}_windows{WINDOW_LENGTH}onset_jitter{USE_JITTER}_ep{EPOCHS}_1'
 
 MODELDIR = r'C:\Users\Utente\Desktop\wetransfer_controls-microcirculation_2024-04-23_1250\controls-microcirculation\tf_bilanciato\modelli'
 DATASETDIR = r'C:\Users\Utente\Desktop\wetransfer_controls-microcirculation_2024-04-23_1250\controls-microcirculation\tf_bilanciato'
@@ -92,6 +94,7 @@ def normalize(x):
 
 ###  AGGIUSTATA  #####
 def load_and_select_window(filepath, y):
+    tf.print("ok")
     # Assicurati che filepath sia una stringa
     filepath = tf.compat.as_str_any(filepath)
     # Costruisci il percorso per i punti di inizio basato sul percorso del file originale
@@ -111,12 +114,54 @@ def load_and_select_window(filepath, y):
     y = to_categorical(y, num_classes=len(CLASSES))
     return signal_data, y
 
+def resize_array(array, target_height, target_width):
+    # Calculate the zoom factors for height and width
+    zoom_factors = (target_height / array.shape[0], target_width / array.shape[1], 1)
+    
+    # Use scipy.ndimage.zoom to resize the array
+    resized_array = zoom(array, zoom_factors, order=1)  # Use order=1 for bilinear interpolation
+    
+    return resized_array
+
+def load_and_select_window_with_scalogram(filepath, y):
+    #print("Function load_and_select_window_with_scalogram called")  # Debug print
+    filepath = tf.compat.as_str_any(filepath)
+    pathToPoints = filepath.removesuffix('.npz') + '.txt'
+    onsetList = np.loadtxt(pathToPoints).astype(np.int64)
+    start_timestep = random.choice(onsetList)
+    signal_data = np.load(filepath)['arr_0'].astype('float64')
+    
+    if NORMALIZE:
+        signal_data = normalize(signal_data)
+    
+    if USE_WINDOWS:
+        #tf.print(f'{USE_WINDOWS}')
+        while (signal_data[start_timestep:]).size < WINDOW_LENGTH:
+            start_timestep = random.choice(onsetList)
+        signal_data = signal_data[start_timestep:start_timestep + WINDOW_LENGTH]
+    
+    y = to_categorical(y, num_classes=len(CLASSES))
+    
+    # Compute scalogram
+    Wx, scales, _ = sp.cwt(signal_data, 'morlet', scales='log', derivative=False, nv=32)
+    Wx = np.abs(Wx)
+    # Convert to image
+    Wx_with_channel = Wx[:, :, np.newaxis]
+    Wx_rgb = np.concatenate([Wx_with_channel]*3, axis=-1)
+    Wx_rgb = Wx_rgb.astype(np.float32)
+    #tf.print(f"{Wx_rgb.shape}_conv")
+
+    if RESIZE_IMG:
+        resized_image = resize_array(Wx_rgb, 224, 224)
+        return resized_image, y
+    else:    
+        return Wx_rgb, y
 
 
 ######################
 
 def fix_shape(x, y):
-  print(f"{x.shape[0]},{x.shape[1]}, {x.shape[2]}_fixshape")
+  print(f"Fix_shape called with: {x.shape}, {y.shape}")
   if USE_SCALOGRAM:
       x.set_shape([None, x.shape[0], x.shape[1], x.shape[2]])
       y.set_shape([None, 2])
@@ -127,6 +172,7 @@ def fix_shape(x, y):
     y.set_shape([None, 2])
 
   return x, y
+
 
 # augmenting functions 
 def calculate_fft(x, y):
@@ -166,26 +212,19 @@ def get_id(data_path):
     return sub_ids
 
 
-def compute_scalogram(x,y):
-    print("ok")
-    # Calcola lo scalogramma
-    Wx, scales, _ = sp.cwt(x, 'morlet', scales='log', derivative=False, nv=32)
-    x = np.abs(Wx)
-    return x,y 
-
-def convert_to_image_and_label(Wx, label):
-    Wx_with_channel = Wx[:, :, np.newaxis]
-    # Duplica i canali per creare un'immagine RGB
-    Wx_rgb = np.concatenate([Wx_with_channel]*3, axis=-1)
-    print(f"{Wx_rgb.shape}_conv")
-    
-    # Converti l'array in un'immagine PIL
-    image_rgb = tf.keras.utils.array_to_img(Wx_rgb)
-    print(f"{image_rgb.shape}_imagergb")
-    # Converti l'immagine PIL in un Tensor TensorFlow
-    image_tensor = tf.convert_to_tensor(np.array(image_rgb), dtype=tf.float32)
-    print(f"{image_tensor.shape}_imagetens")
-    return image_tensor, label
+# Funzione per plottare le immagini scalogrammi nel dataset
+def plot_dataset_samples(dataset, num_samples=5):
+    for i, (image_batch, label_batch) in enumerate(dataset.take(num_samples)):
+        for j in range(image_batch.shape[0]):  # Itera attraverso ogni immagine nel batch
+            image = image_batch[j].numpy()
+            label = label_batch[j].numpy()
+            plt.figure(figsize=(8, 4))
+            plt.imshow(image.astype('float32'), aspect='auto', cmap='viridis')
+            plt.title(f'Sample {i+1}-{j+1} - Label: {CLASSES[np.argmax(label)]}')
+            plt.colorbar()
+            plt.show()
+        
+        
 
 ###################
 
@@ -215,61 +254,43 @@ def create_train_val_splits(train_paths):
 
 
 
-#####cambiare questa sopra per eliminare la cross validation ########### 
-
-
-
-
-
 def create_dataset(X_train, y_train, X_val, y_val):
 
   ds_train = tf.data.Dataset.from_tensor_slices((X_train, y_train))
   ds_valid = tf.data.Dataset.from_tensor_slices((X_val, y_val))
   
-
-  # Mappatura delle funzioni per il caricamento, il calcolo dello scalogramma e la conversione in immagine
-  ds_train = ds_train.map(lambda filepath, label: tf.numpy_function(
-        load_and_select_window, [filepath, label], [tf.double, tf.int32]), 
-        num_parallel_calls=tf.data.experimental.AUTOTUNE)
-  
-
+  if USE_WINDOWS and not USE_SCALOGRAM:
+      # Mappatura delle funzioni per il caricamento, il calcolo dello scalogramma e la conversione in immagine
+      ds_train = ds_train.map(lambda filepath, label: tf.numpy_function(
+            load_and_select_window, [filepath, label], [tf.double, tf.float32]))
   if USE_SCALOGRAM:
-      
-      ds_train = ds_train.map(lambda sig, label: tf.numpy_function(
-            compute_scalogram, [sig,label], [tf.float64,tf.int32]), 
-            num_parallel_calls=tf.data.experimental.AUTOTUNE)
-        
-      ds_train = ds_train.map(lambda Wx, label: tf.numpy_function(
-            convert_to_image_and_label, [Wx, label], [tf.float32, tf.int32]), 
-            num_parallel_calls=tf.data.experimental.AUTOTUNE)
+      # Mappatura delle funzioni per il caricamento, il calcolo dello scalogramma e la conversione in immagine
+      ds_train = ds_train.map(lambda filepath, label: tf.numpy_function(
+            load_and_select_window_with_scalogram, [filepath, label], [tf.float32, tf.float32]))
 
-  
   ds_train = ds_train.cache()
+
   ds_train = ds_train.batch(BATCH_SIZE)
+
   ds_train = ds_train.map(fix_shape)
 
 
-  # Mappatura delle funzioni per il caricamento, il calcolo dello scalogramma e la conversione in immagine
-  ds_valid = ds_train.map(lambda filepath, label: tf.numpy_function(
-        load_and_select_window, [filepath, label], [tf.double, tf.int32]), 
-        num_parallel_calls=tf.data.experimental.AUTOTUNE)
-  
-  
+  if USE_WINDOWS and not USE_SCALOGRAM:
+        ds_valid = ds_valid.map(lambda filepath, label: tf.numpy_function(
+            load_and_select_window, [filepath, label], [tf.double, tf.float32]), 
+            num_parallel_calls=tf.data.experimental.AUTOTUNE)
+    
   if USE_SCALOGRAM:
-      
-      ds_valid = ds_train.map(lambda sig, label: tf.numpy_function(
-            compute_scalogram, [sig,label], [tf.float64,tf.int32]), 
-            num_parallel_calls=tf.data.experimental.AUTOTUNE)
-        
-      ds_valid = ds_train.map(lambda Wx, label: tf.numpy_function(
-            convert_to_image_and_label, [Wx, label], [tf.float32, tf.int32]), 
-            num_parallel_calls=tf.data.experimental.AUTOTUNE)
-  
+        ds_valid = ds_valid.map(lambda filepath, label: tf.numpy_function(
+            load_and_select_window_with_scalogram, [filepath, label], [tf.float32, tf.float32]))
+
+
   
   ds_valid = ds_valid.cache()
   ds_valid = ds_valid.batch(BATCH_SIZE)
   ds_valid = ds_valid.map(fix_shape)
   return ds_train, ds_valid
+
 
 # DEFINE MODELS
 
@@ -491,7 +512,51 @@ def gruSara_plus_adjusted_64(input_shape, nclasses):
     return model
 
 
+def modello_scalogrammi_ResNet50(input_shape, nclasses):
+    base_model = tf.keras.applications.ResNet50(
+        include_top=False,
+        weights='imagenet',
+        input_shape=input_shape,
+        pooling= None
+    )
+    base_model.trainable = False  # Freeze the base model
 
+    inputs = Input(shape=input_shape)
+    x = base_model(inputs, training=False)
+    x = GlobalAveragePooling2D()(x)
+    x = Dense(128, activation='relu')(x)
+    x = Dropout(DROPOUT_RATE)(x)
+    outputs = Dense(nclasses, activation='softmax')(x)
+    model = Model(inputs, outputs)
+    model.compile(optimizer=OPTIMIZER, loss = LOSSFUNCTION, metrics=['accuracy'])
+    return model
+
+
+
+def modello_scalogrammi_MobileNetV2(input_shape, nclasses, unfrozen_layers=50):
+    base_model = tf.keras.applications.MobileNetV2(
+        include_top=False,
+        weights='imagenet',
+        input_shape=input_shape,
+        pooling=None
+    )
+
+    # Freeze all layers first
+    base_model.trainable = False
+
+    # Unfreeze the last 'unfrozen_layers' layers
+    for layer in base_model.layers[-unfrozen_layers:]:
+        layer.trainable = True
+
+    inputs = Input(shape=input_shape)
+    x = base_model(inputs, training=True)
+    x = GlobalAveragePooling2D()(x)
+    x = Dense(128, activation='relu')(x)
+    x = Dropout(DROPOUT_RATE)(x)  # Assuming DROPOUT_RATE is 0.5
+    outputs = Dense(nclasses, activation='softmax')(x)
+    model = Model(inputs, outputs)
+    model.compile(optimizer='adam', loss='sparse_categorical_crossentropy', metrics=['accuracy'])  # Assuming OPTIMIZER is 'adam' and LOSSFUNCTION is 'sparse_categorical_crossentropy'
+    return model
 
 
 # create train-validation splits for k-fold cross validation
@@ -525,17 +590,31 @@ for i in range(0, K):
   ds_train, ds_valid = create_dataset(X_train, y_train, X_val, y_val)
   
   # if USE_SCALOGRAM:
-      
+  #   # Per plottare le prime N immagini dal dataset di training
+  #   plot_dataset_samples(ds_train, num_samples=5)
+    
+    
+  if USE_SCALOGRAM:
+        # Set the input shape for scalograms
+        example_scalogram, _ = next(iter(ds_train))
+        #print(f'{example_scalogram}')
+        INPUT_SHAPE = example_scalogram.shape[1:]
+        #print(f'{INPUT_SHAPE}')
+
+            
   
   
   
-  
-  if USE_WINDOWS:
+  if USE_WINDOWS and not USE_SCALOGRAM:
     INPUT_SHAPE = (WINDOW_LENGTH,1)
-  else:
+    
+  if not USE_WINDOWS and not USE_SCALOGRAM:
     INPUT_SHAPE = (NSAMPLES,1)
+    
+    
+    
   # CREATE AND COMPILE MODEL
-  model = gruSara_plus_adjusted(input_shape = INPUT_SHAPE, nclasses = len(CLASSES))
+  model = modello_scalogrammi_MobileNetV2(input_shape = INPUT_SHAPE, nclasses = len(CLASSES))
   model.summary()
   model.compile(optimizer=OPTIMIZER,loss=LOSSFUNCTION, metrics=['accuracy'])
 
