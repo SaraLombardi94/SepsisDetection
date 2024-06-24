@@ -1,7 +1,6 @@
 # -*- coding: utf-8 -*-
 """
 Created on Tue May 14 15:11:07 2024
-
 @author: Utente
 """
 
@@ -33,9 +32,9 @@ from scipy.ndimage import zoom
 #constants
 FS = 125
 N_CLASSES = 2 # control, sepsis 
-LR = 1e-3
-BATCH_SIZE = 8   #aggiornamento dei pesi della rete 
-EPOCHS = 150
+LR = 1e-4
+BATCH_SIZE = 16   #aggiornamento dei pesi della rete 
+EPOCHS = 10
 K = 5
 NSAMPLES = FS*30
 WINDOW_LENGTH = FS * 30 * 1 
@@ -46,20 +45,20 @@ USE_WINDOWS = True
 USE_JITTER = False
 USE_LOSO = False
 USE_SCALOGRAM = True
-RESIZE_IMG = False
+RESIZE_IMG = True
 DROPOUT_RATE = 0.2
 RANDOM_STATE = 12
 BUFFER_SHUFFLING_SIZE = 180
 KERNEL_INITIALIZER='glorot_uniform'
 LOSSFUNCTION = tf.keras.losses.BinaryCrossentropy()
 OPTIMIZER = tf.keras.optimizers.Adam(learning_rate=LR)
-MODELNAME = f'{K}fold_dsTM2min30_Prova_scalogrammi_MobileNet_3_mse_bs{BATCH_SIZE}_lre{LR}_windows{WINDOW_LENGTH}onset_jitter{USE_JITTER}_ep{EPOCHS}_1'
+MODELNAME = f'{K}fold_modello_scalogrammi_vgg16_unfrozen10_bs{BATCH_SIZE}_lre{LR}_windows{WINDOW_LENGTH}onset_ep{EPOCHS}'
 
-MODELDIR = r'C:\Users\Utente\Desktop\wetransfer_controls-microcirculation_2024-04-23_1250\controls-microcirculation\tf_bilanciato\modelli'
-DATASETDIR = r'C:\Users\Utente\Desktop\wetransfer_controls-microcirculation_2024-04-23_1250\controls-microcirculation\tf_bilanciato'
+MODELDIR = r'D:\phD_Sara\models\control_target\scalograms'
+DATASETDIR = r'D:\phD_Sara\microcircolo\Sepsis\datasets\controls-microcirculation\datasetSeed4'
 LOGDIR = os.path.join(MODELDIR,MODELNAME,'logs')
 WEIGHTSDIR = os.path.join(MODELDIR,MODELNAME,'weights')
-CLASSES = ['control','microcirculation']
+CLASSES = ['controls','target']
 #PRETRAINED_MODELPATH = '/Users/saralombardi/Desktop/COVID/pre-trainedsepsi'
 
 class LRTensorBoard(TensorBoard):
@@ -143,11 +142,11 @@ def load_and_select_window_with_scalogram(filepath, y):
     y = to_categorical(y, num_classes=len(CLASSES))
     
     # Compute scalogram
-    Wx, scales, _ = sp.cwt(signal_data, 'morlet', scales='log', derivative=False, nv=32)
+    Wx, scales = sp.cwt(signal_data, 'morlet', scales='log', derivative=False, nv=32)
     Wx = np.abs(Wx)
     # Convert to image
-    Wx_with_channel = Wx[:, :, np.newaxis]
-    Wx_rgb = np.concatenate([Wx_with_channel]*3, axis=-1)
+    Wx_rgb = Wx[:, :, np.newaxis]
+    Wx_rgb = np.concatenate([Wx_rgb]*3, axis=-1)
     Wx_rgb = Wx_rgb.astype(np.float32)
     #tf.print(f"{Wx_rgb.shape}_conv")
 
@@ -201,15 +200,27 @@ def jitter(x, y):
 
 
 ####### AGGIUSTATA ##########
+# def get_id(data_path):
+#     sub_ids = []
+#     for item in data_path:
+#         file_name = os.path.basename(item)  # Ottiene il nome del file dalla directory
+#         sub_id = file_name[:7]  # Estrae i primi 7 caratteri del nome del file
+#         if not sub_id.startswith('p'):
+#             raise Exception(f'Subject name has to start with "p", for example pleth0. Found {sub_id}')
+#         sub_ids.append(sub_id)
+#     return sub_ids
+
+
 def get_id(data_path):
-    sub_ids = []
-    for item in data_path:
-        file_name = os.path.basename(item)  # Ottiene il nome del file dalla directory
-        sub_id = file_name[:7]  # Estrae i primi 7 caratteri del nome del file
-        if not sub_id.startswith('p'):
-            raise Exception(f'Subject name has to start with "p", for example pleth0. Found {sub_id}')
-        sub_ids.append(sub_id)
-    return sub_ids
+  sub_ids=[]
+  for item in data_path:
+    file_name = item.split(os.path.sep)[-1].rstrip('.npz')
+    sub_id = file_name.split('_')[0]
+    if not sub_id.startswith('p'):
+      raise Exception(f'Subject name has to start with "p", for example pleth0. Found {sub_id}')
+    sub_ids.append(sub_id)
+  return sub_ids
+   
 
 
 # Funzione per plottare le immagini scalogrammi nel dataset
@@ -540,7 +551,6 @@ def modello_scalogrammi_MobileNetV2(input_shape, nclasses, unfrozen_layers=50):
         input_shape=input_shape,
         pooling=None
     )
-
     # Freeze all layers first
     base_model.trainable = False
 
@@ -555,13 +565,101 @@ def modello_scalogrammi_MobileNetV2(input_shape, nclasses, unfrozen_layers=50):
     x = Dropout(DROPOUT_RATE)(x)  # Assuming DROPOUT_RATE is 0.5
     outputs = Dense(nclasses, activation='softmax')(x)
     model = Model(inputs, outputs)
-    model.compile(optimizer='adam', loss='sparse_categorical_crossentropy', metrics=['accuracy'])  # Assuming OPTIMIZER is 'adam' and LOSSFUNCTION is 'sparse_categorical_crossentropy'
+    return model
+
+
+
+def cnnModel2D_0(input_shape, nclasses):
+    model = Sequential()
+
+    model.add(tensorflow.keras.layers.Conv2D(32, kernel_size=(3, 3), activation='relu', input_shape=input_shape))
+    model.add(tensorflow.keras.layers.Conv2D(64, kernel_size=(3, 3), activation='relu'))
+    model.add(tensorflow.keras.layers.MaxPooling2D(pool_size=(2, 2)))
+    model.add(tensorflow.keras.layers.Dropout(0.2))
+
+    model.add(tensorflow.keras.layers.Conv2D(64, kernel_size=(3, 3), activation='relu'))
+    model.add(tensorflow.keras.layers.MaxPooling2D(pool_size=(2, 2)))
+    model.add(tensorflow.keras.layers.Conv2D(128, kernel_size=(3, 3), activation='relu'))
+    model.add(tensorflow.keras.layers.MaxPooling2D(pool_size=(2, 2)))
+    model.add(tensorflow.keras.layers.Dropout(0.2))
+
+    model.add(tensorflow.keras.layers.Flatten())
+    model.add(tensorflow.keras.layers.Dense(256, activation='relu'))
+    model.add(tensorflow.keras.layers.Dropout(0.3))
+    model.add(tensorflow.keras.layers.Dense(nclasses, activation='softmax'))
+    
+    return model
+
+
+def cnnModel2D_1(input_shape, nclasses):
+    model = Sequential()
+
+    model.add(tensorflow.keras.layers.Conv2D(32, kernel_size=(3, 3), activation='relu', input_shape=input_shape))
+    model.add(tensorflow.keras.layers.Conv2D(32, kernel_size=(3, 3), activation='relu'))
+    model.add(tensorflow.keras.layers.MaxPooling2D(pool_size=(2, 2)))
+    model.add(tensorflow.keras.layers.Dropout(0.2))
+
+    model.add(tensorflow.keras.layers.Conv2D(64, kernel_size=(3, 3), activation='relu', input_shape=input_shape))
+    model.add(tensorflow.keras.layers.Conv2D(64, kernel_size=(3, 3), activation='relu'))
+    model.add(tensorflow.keras.layers.MaxPooling2D(pool_size=(2, 2)))
+    model.add(tensorflow.keras.layers.Dropout(0.2))
+
+    model.add(tensorflow.keras.layers.Conv2D(128, kernel_size=(3, 3), activation='relu'))
+    model.add(tensorflow.keras.layers.MaxPooling2D(pool_size=(2, 2)))
+    model.add(tensorflow.keras.layers.Conv2D(128, kernel_size=(3, 3), activation='relu'))
+    model.add(tensorflow.keras.layers.MaxPooling2D(pool_size=(2, 2)))
+    model.add(tensorflow.keras.layers.Dropout(0.2))
+
+    model.add(tensorflow.keras.layers.Flatten())
+    model.add(tensorflow.keras.layers.Dense(256, activation='relu'))
+    model.add(tensorflow.keras.layers.Dropout(0.3))
+    model.add(tensorflow.keras.layers.Dense(nclasses, activation='softmax'))
+    
+    return model
+
+
+
+def vgg19(input_shape, nclasses):
+    base_model = tf.keras.applications.VGG19( 
+                        weights ='imagenet',
+                        include_top = False,
+                        input_shape = input_shape)
+
+    x = base_model.output
+    x = GlobalAveragePooling2D()(x)
+    x = Dense(64, activation='relu')(x)
+    predictions = Dense(nclasses, activation='sigmoid')(x)
+    model = Model(inputs=base_model.input, outputs=predictions)
+    return model
+
+
+def modello_scalogrammi_vgg16(input_shape, nclasses, unfrozen_layers=10):
+    base_model = tf.keras.applications.VGG16(
+        include_top=False,
+        weights='imagenet',
+        input_shape=input_shape,
+        pooling=None
+    )
+    # Freeze all layers first
+    base_model.trainable = False
+
+    # Unfreeze the last 'unfrozen_layers' layers
+    for layer in base_model.layers[-unfrozen_layers:]:
+        layer.trainable = True
+
+    inputs = Input(shape=input_shape)
+    x = base_model(inputs, training=True)
+    x = GlobalAveragePooling2D()(x)
+    x = Dense(128, activation='relu')(x)
+    x = Dropout(DROPOUT_RATE)(x)  # Assuming DROPOUT_RATE is 0.5
+    outputs = Dense(nclasses, activation='softmax')(x)
+    model = Model(inputs, outputs)
     return model
 
 
 # create train-validation splits for k-fold cross validation
-dataPaths = glob(os.path.join(f'{DATASETDIR}','control','*.npz'))+ glob(os.path.join(f'{DATASETDIR}','microcirculation','*.npz'))
-
+#dataPaths = glob(os.path.join(f'{DATASETDIR}','control','*.npz'))+ glob(os.path.join(f'{DATASETDIR}','microcirculation','*.npz'))
+dataPaths = glob(os.path.join(f'{DATASETDIR}','target','*.npz'))+ glob(os.path.join(f'{DATASETDIR}','controls','*.npz'))
 print(len(dataPaths))
 groups = get_id(dataPaths)
 groups = list(np.unique(groups))
@@ -589,9 +687,9 @@ for i in range(0, K):
   # CREATE DATA SET
   ds_train, ds_valid = create_dataset(X_train, y_train, X_val, y_val)
   
-  # if USE_SCALOGRAM:
-  #   # Per plottare le prime N immagini dal dataset di training
-  #   plot_dataset_samples(ds_train, num_samples=5)
+  if USE_SCALOGRAM:
+     # Per plottare le prime N immagini dal dataset di training
+     plot_dataset_samples(ds_train, num_samples=5)
     
     
   if USE_SCALOGRAM:
@@ -601,9 +699,6 @@ for i in range(0, K):
         INPUT_SHAPE = example_scalogram.shape[1:]
         #print(f'{INPUT_SHAPE}')
 
-            
-  
-  
   
   if USE_WINDOWS and not USE_SCALOGRAM:
     INPUT_SHAPE = (WINDOW_LENGTH,1)
@@ -614,7 +709,7 @@ for i in range(0, K):
     
     
   # CREATE AND COMPILE MODEL
-  model = modello_scalogrammi_MobileNetV2(input_shape = INPUT_SHAPE, nclasses = len(CLASSES))
+  model =  modello_scalogrammi_vgg16(input_shape = INPUT_SHAPE, nclasses = len(CLASSES))
   model.summary()
   model.compile(optimizer=OPTIMIZER,loss=LOSSFUNCTION, metrics=['accuracy'])
 
@@ -673,7 +768,7 @@ np.savetxt(os.path.join(MODELDIR,MODELNAME,'losses.txt'), losses)
 print(f'Mean accuracy is : {np.mean(accuracies)}')
 print(f'Mean loss is : {np.mean(losses)}')
 
-
+"""
 ##########saliency map #########
 sample_signal, classe = load_and_select_window('C:/Users/Utente/Desktop/wetransfer_controls-microcirculation_2024-04-23_1250/controls-microcirculation/tf_bilanciato/microcirculation/plre90.npy_#99.npz',1)
 
@@ -713,3 +808,4 @@ plt.title('Saliency Map')
 im = plt.imshow(grad_abs, aspect='auto', cmap='viridis', extent=[0, grad_abs.shape[-1], 0, 1])
 plt.colorbar(im)  # Aggiungi la colorbar riferendoti a 'im'
 plt.show()
+"""
