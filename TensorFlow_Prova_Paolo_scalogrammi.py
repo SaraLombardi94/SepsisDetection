@@ -7,34 +7,29 @@ Created on Tue May 14 15:11:07 2024
 import random
 import os
 import numpy as np
-import tensorflow.keras
 import tensorflow as tf
+import tensorflow.keras
 from glob import glob
-#import tensorflow_addons as tfa
 import sklearn
 from tensorflow.keras.utils import to_categorical
 from sklearn.model_selection import KFold, train_test_split, GroupShuffleSplit, StratifiedGroupKFold, GroupKFold
 from sklearn import preprocessing
 from sklearn.utils import shuffle
 from scipy.fft import fft
-#model
-from tensorflow.keras.models import Model, Sequential
-from tensorflow.keras.layers import Input, Add, Dense, BatchNormalization, Activation, Dropout, Flatten, GlobalAveragePooling2D
-from tensorflow.keras.layers import Convolution1D, ZeroPadding1D, MaxPooling1D, AveragePooling1D
-from tensorflow.keras.layers import LSTM, TimeDistributed
-from tensorflow.keras.callbacks import TensorBoard, ModelCheckpoint
-from tensorflow.keras.callbacks import ReduceLROnPlateau, LearningRateScheduler
 import matplotlib.pyplot as plt
 from tensorflow.keras.layers import Input, LSTM, Dense, Dropout, Bidirectional
 from tensorflow.keras.initializers import GlorotUniform
 import ssqueezepy as sp
 from scipy.ndimage import zoom
+from dnnImageModels import *
+from tensorflow.keras.callbacks import TensorBoard, ModelCheckpoint
+from tensorflow.keras.callbacks import ReduceLROnPlateau, LearningRateScheduler
 #constants
 FS = 125
 N_CLASSES = 2 # control, sepsis 
 LR = 1e-4
-BATCH_SIZE = 16   #aggiornamento dei pesi della rete 
-EPOCHS = 10
+BATCH_SIZE = 64  #aggiornamento dei pesi della rete 
+EPOCHS = 300
 K = 5
 NSAMPLES = FS*30
 WINDOW_LENGTH = FS * 30 * 1 
@@ -52,7 +47,7 @@ BUFFER_SHUFFLING_SIZE = 180
 KERNEL_INITIALIZER='glorot_uniform'
 LOSSFUNCTION = tf.keras.losses.BinaryCrossentropy()
 OPTIMIZER = tf.keras.optimizers.Adam(learning_rate=LR)
-MODELNAME = f'{K}fold_modello_scalogrammi_vgg16_unfrozen10_bs{BATCH_SIZE}_lre{LR}_windows{WINDOW_LENGTH}onset_ep{EPOCHS}'
+MODELNAME = f'{K}fold_InceptionV3_unfrozen15_dropout0.2_bs{BATCH_SIZE}_lre{LR}_windows{WINDOW_LENGTH}onset_ep{EPOCHS}'
 
 MODELDIR = r'D:\phD_Sara\models\control_target\scalograms'
 DATASETDIR = r'D:\phD_Sara\microcircolo\Sepsis\datasets\controls-microcirculation\datasetSeed4'
@@ -93,7 +88,6 @@ def normalize(x):
 
 ###  AGGIUSTATA  #####
 def load_and_select_window(filepath, y):
-    tf.print("ok")
     # Assicurati che filepath sia una stringa
     filepath = tf.compat.as_str_any(filepath)
     # Costruisci il percorso per i punti di inizio basato sul percorso del file originale
@@ -215,13 +209,15 @@ def get_id(data_path):
   sub_ids=[]
   for item in data_path:
     file_name = item.split(os.path.sep)[-1].rstrip('.npz')
-    sub_id = file_name.split('_')[0]
+    if "_" in file_name:
+        sub_id = file_name.split('_')[0]
+    elif "-" in file_name:
+        sub_id = file_name.split('-')[0]
     if not sub_id.startswith('p'):
       raise Exception(f'Subject name has to start with "p", for example pleth0. Found {sub_id}')
     sub_ids.append(sub_id)
   return sub_ids
    
-
 
 # Funzione per plottare le immagini scalogrammi nel dataset
 def plot_dataset_samples(dataset, num_samples=5):
@@ -229,13 +225,12 @@ def plot_dataset_samples(dataset, num_samples=5):
         for j in range(image_batch.shape[0]):  # Itera attraverso ogni immagine nel batch
             image = image_batch[j].numpy()
             label = label_batch[j].numpy()
-            plt.figure(figsize=(8, 4))
-            plt.imshow(image.astype('float32'), aspect='auto', cmap='viridis')
-            plt.title(f'Sample {i+1}-{j+1} - Label: {CLASSES[np.argmax(label)]}')
-            plt.colorbar()
-            plt.show()
-        
-        
+            # plt.figure(figsize=(8, 4))
+            # plt.imshow(image.astype('float32'), aspect='auto', cmap='viridis')
+            # plt.title(f'Sample {i+1}-{j+1} - Label: {CLASSES[np.argmax(label)]}')
+            # plt.colorbar()
+            # plt.show()
+           
 
 ###################
 
@@ -261,8 +256,8 @@ def create_train_val_splits(train_paths):
       y_train_splits.append(y_train)
       X_val_splits.append(X_val)
       y_val_splits.append(y_val)
+      
   return X_train_splits, y_train_splits, X_val_splits, y_val_splits
-
 
 
 def create_dataset(X_train, y_train, X_val, y_val):
@@ -294,369 +289,14 @@ def create_dataset(X_train, y_train, X_val, y_val):
   if USE_SCALOGRAM:
         ds_valid = ds_valid.map(lambda filepath, label: tf.numpy_function(
             load_and_select_window_with_scalogram, [filepath, label], [tf.float32, tf.float32]))
-
-
   
   ds_valid = ds_valid.cache()
   ds_valid = ds_valid.batch(BATCH_SIZE)
   ds_valid = ds_valid.map(fix_shape)
+  
   return ds_train, ds_valid
 
-
-# DEFINE MODELS
-
-############    LA PRIMA DA PROVARE      #################
-
-def saraCnn1(input_shape, nclasses):
-    x_input = Input(input_shape)    
-    x = Convolution1D(filters=64, kernel_size=11, strides=1, activation='relu', kernel_initializer=KERNEL_INITIALIZER) (x_input)
-    x = MaxPooling1D(pool_size=(4),padding='valid',strides=2)(x)
-    x = Convolution1D(filters=64, kernel_size=11, strides=1, activation='relu', kernel_initializer=KERNEL_INITIALIZER) (x)
-    x = MaxPooling1D(pool_size=(4),padding='valid',strides=2)(x)
-    x = Convolution1D(filters=128, kernel_size=11, strides=1, activation='relu', kernel_initializer=KERNEL_INITIALIZER) (x)
-    x = MaxPooling1D(pool_size=(4),padding='valid',strides=2)(x)
-    x = Convolution1D(filters=128, kernel_size=11, strides=1, activation='relu', kernel_initializer=KERNEL_INITIALIZER) (x)
-    x = MaxPooling1D(pool_size=(4),padding='valid',strides=2)(x)
-    x = Flatten()(x)
-    x = Dense(100, activation = 'relu', kernel_initializer=KERNEL_INITIALIZER)(x)
-    x = Dropout(DROPOUT_RATE)(x)
-    x = Dense(50, activation = 'relu', kernel_initializer=KERNEL_INITIALIZER)(x)
-    x = Dropout(DROPOUT_RATE)(x)
-    x = Dense(nclasses, activation = 'softmax', kernel_initializer=KERNEL_INITIALIZER)(x)
-    #create model
-    model = Model(inputs = x_input, outputs = x , name = 'eegseizure1')
-    return model
-
-
-def saraCnnEnhanced(input_shape, nclasses):
-    x_input = Input(input_shape)
-    
-    # Primo blocco convoluzionale con Batch Normalization e MaxPooling
-    x = Convolution1D(filters=64, kernel_size=11, strides=1, padding='same', kernel_initializer='he_uniform')(x_input)
-    x = BatchNormalization()(x)
-    x = Activation('relu')(x)
-    x = MaxPooling1D(pool_size=4, strides=2, padding='valid')(x)
-    
-    # Secondo blocco convoluzionale con Batch Normalization e AveragePooling
-    x = Convolution1D(filters=128, kernel_size=7, strides=1, padding='same', kernel_initializer='he_uniform')(x)
-    x = BatchNormalization()(x)
-    x = Activation('relu')(x)
-    x = AveragePooling1D(pool_size=4, strides=2, padding='valid')(x)
-    
-    # Terzo blocco convoluzionale con Batch Normalization e MaxPooling
-    x = Convolution1D(filters=256, kernel_size=5, strides=1, padding='same', kernel_initializer='he_uniform')(x)
-    x = BatchNormalization()(x)
-    x = Activation('relu')(x)
-    x = MaxPooling1D(pool_size=4, strides=2, padding='valid')(x)
-    
-    # Quarto blocco convoluzionale con Batch Normalization e AveragePooling
-    x = Convolution1D(filters=256, kernel_size=5, strides=1, padding='same', kernel_initializer='he_uniform')(x)
-    x = BatchNormalization()(x)
-    x = Activation('relu')(x)
-    x = AveragePooling1D(pool_size=4, strides=2, padding='valid')(x)
-
-    # Appiattimento e strati fully connected con Dropout
-    x = Flatten()(x)
-    x = Dense(256, activation='relu', kernel_initializer='he_uniform')(x)
-    x = Dropout(0.5)(x)
-    x = Dense(128, activation='relu', kernel_initializer='he_uniform')(x)
-    x = Dropout(0.5)(x)
-    
-    # Strato di output
-    x = Dense(nclasses, activation='softmax', kernel_initializer='he_uniform')(x)
-    
-    # Creazione del modello
-    model = Model(inputs=x_input, outputs=x, name='Enhanced_saraCnn')
-    return model
-
-def simplifiedSaraCnn1(input_shape, nclasses, KERNEL_INITIALIZER='glorot_uniform', DROPOUT_RATE=0.5):
-    x_input = Input(input_shape)    
-    x = Convolution1D(filters=32, kernel_size=11, strides=2, activation='relu', kernel_initializer=KERNEL_INITIALIZER)(x_input)
-    x = MaxPooling1D(pool_size=4, padding='valid', strides=2)(x)
-    x = Convolution1D(filters=64, kernel_size=11, strides=2, activation='relu', kernel_initializer=KERNEL_INITIALIZER)(x)
-    x = MaxPooling1D(pool_size=4, padding='valid', strides=2)(x)
-    x = Flatten()(x)
-    x = Dense(50, activation='relu', kernel_initializer=KERNEL_INITIALIZER)(x)
-    x = Dropout(DROPOUT_RATE)(x)
-    x = Dense(nclasses, activation='softmax', kernel_initializer=KERNEL_INITIALIZER)(x)
-    model = Model(inputs=x_input, outputs=x, name='simplified_eegseizure1')
-    return model
-
-def ultraSimplifiedSaraCnn1(input_shape, nclasses, KERNEL_INITIALIZER='glorot_uniform', DROPOUT_RATE=0.5):
-    x_input = Input(input_shape)    
-    x = Convolution1D(filters=16, kernel_size=11, strides=2, activation='relu', kernel_initializer=KERNEL_INITIALIZER)(x_input)
-    x = MaxPooling1D(pool_size=4, padding='valid', strides=2)(x)
-    x = Flatten()(x)
-    x = Dense(nclasses, activation='softmax', kernel_initializer=KERNEL_INITIALIZER)(x)
-    model = Model(inputs=x_input, outputs=x, name='ultraSimplified_eegseizure1')
-    return model
-
-
-
-def saraRNN1(input_shape, nclasses):
-    x_input = Input(input_shape)
-
-    # Definizione degli strati LSTM
-    x = LSTM(64, return_sequences=True, kernel_initializer=GlorotUniform())(x_input)
-    x = Dropout(0.5)(x)
-    x = LSTM(64, return_sequences=True, kernel_initializer=GlorotUniform())(x)
-    x = Dropout(0.5)(x)
-    x = LSTM(128, return_sequences=True, kernel_initializer=GlorotUniform())(x)
-    x = Dropout(0.5)(x)
-    x = LSTM(128, return_sequences=False, kernel_initializer=GlorotUniform())(x)  # return_sequences=False per preparare l'uscita all'ultimo layer Dense
-
-    # Aggiunta dei livelli fully connected
-    x = Dense(100, activation='relu', kernel_initializer=GlorotUniform())(x)
-    x = Dropout(0.5)(x)
-    x = Dense(50, activation='relu', kernel_initializer=GlorotUniform())(x)
-    x = Dropout(0.5)(x)
-
-    # Strato di output
-    x = Dense(nclasses, activation='softmax', kernel_initializer=GlorotUniform())(x)
-
-    # Creazione del modello
-    model = Model(inputs=x_input, outputs=x, name='eegseizure_rnn1')
-    return model
-
-def build_brnn_model(input_shape, nclasses):
-    model = Sequential()
-    model.add(Bidirectional(LSTM(64, return_sequences=True), input_shape=input_shape))
-    model.add(Dropout(0.5))
-    model.add(Bidirectional(LSTM(32)))
-    model.add(Dropout(0.5))
-    model.add(Dense(64, activation='relu'))
-    model.add(Dense(nclasses, activation='softmax'))
-
-    model.compile(optimizer='adam', loss='categorical_crossentropy', metrics=['accuracy'])
-    return model
- 
-
-def gruSara(input_shape,nclasses):
-    model = tf.keras.Sequential()
-    model.add(tf.keras.layers.Conv1D(16, 32, activation='relu', input_shape=input_shape, kernel_regularizer='l2'))
-    model.add(tf.keras.layers.MaxPool1D(pool_size=4))
-    #model.add(tf.keras.layers.BatchNormalization(axis=1))
-    model.add(tf.keras.layers.Conv1D(32, 16, activation='relu', kernel_regularizer='l2'))
-    model.add(tf.keras.layers.MaxPool1D(pool_size=4))
-    #model.add(tf.keras.layers.BatchNormalization(axis=1))
-    model.add(tf.keras.layers.Conv1D(64, 8, activation='relu', kernel_regularizer='l2'))
-    model.add(tf.keras.layers.MaxPool1D(pool_size=2))
-    model.add(tf.keras.layers.BatchNormalization(axis=1))
-    model.add(tf.keras.layers.GRU(16, dropout=0.5))
-    model.add(tf.keras.layers.Dense(nclasses, activation='sigmoid'))
-    return model
-
-def gruSara_plus(input_shape, nclasses):
-    model = tf.keras.Sequential()
-    # Layer convoluzionali iniziali
-    model.add(tf.keras.layers.Conv1D(16, 32, activation='relu', input_shape=input_shape, kernel_regularizer='l2'))
-    model.add(tf.keras.layers.MaxPool1D(pool_size=4))
-    model.add(tf.keras.layers.Conv1D(32, 16, activation='relu', kernel_regularizer='l2'))
-    model.add(tf.keras.layers.MaxPool1D(pool_size=4))
-    model.add(tf.keras.layers.Conv1D(64, 8, activation='relu', kernel_regularizer='l2'))
-    model.add(tf.keras.layers.MaxPool1D(pool_size=2))
-    model.add(tf.keras.layers.BatchNormalization())
-
-    # Aggiunta di ulteriori layer convoluzionali
-    model.add(tf.keras.layers.Conv1D(128, 4, activation='relu', kernel_regularizer='l2'))
-    model.add(tf.keras.layers.MaxPool1D(pool_size=2))
-
-    # GRU e layer densamente connessi
-    model.add(tf.keras.layers.GRU(16, dropout=0.5, return_sequences=False))  # 'return_sequences=False' per prepararsi al Dense
-    model.add(tf.keras.layers.Dense(nclasses, activation='sigmoid'))
-
-    return model
-
-def gruSara_plus_adjusted(input_shape, nclasses):
-    model = tf.keras.Sequential()
-    # Layer convoluzionali iniziali
-    model.add(tf.keras.layers.Conv1D(16, 32, activation='relu', input_shape=input_shape, kernel_regularizer='l2'))
-    model.add(tf.keras.layers.MaxPool1D(pool_size=4))
-    model.add(tf.keras.layers.Conv1D(32, 16, activation='relu', kernel_regularizer='l2'))
-    model.add(tf.keras.layers.MaxPool1D(pool_size=4))
-    model.add(tf.keras.layers.Conv1D(64, 8, activation='relu', kernel_regularizer='l2'))
-    model.add(tf.keras.layers.MaxPool1D(pool_size=2))
-    model.add(tf.keras.layers.BatchNormalization())
-
-    # Nuovo layer convoluzionale aggiunto
-    model.add(tf.keras.layers.Conv1D(64, 16, activation='relu', kernel_regularizer='l2'))  # Filtro più grande
-    model.add(tf.keras.layers.MaxPool1D(pool_size=2))
-
-    # Aggiunta di ulteriori layer convoluzionali esistenti
-    model.add(tf.keras.layers.Conv1D(128, 4, activation='relu', kernel_regularizer='l2'))
-    model.add(tf.keras.layers.MaxPool1D(pool_size=2))
-
-    # Nuovo layer GRU con più unità
-    model.add(tf.keras.layers.GRU(32, dropout=0.5, return_sequences=False))  # Più unità GRU
-
-    # Layer densamente connesso finale
-    model.add(tf.keras.layers.Dense(nclasses, activation='sigmoid'))
-
-    return model
-
-
-def gruSara_plus_adjusted_64(input_shape, nclasses):
-    model = tf.keras.Sequential()
-    # Layer convoluzionali iniziali
-    model.add(tf.keras.layers.Conv1D(16, 32, activation='relu', input_shape=input_shape, kernel_regularizer='l2'))
-    model.add(tf.keras.layers.MaxPool1D(pool_size=4))
-    model.add(tf.keras.layers.Conv1D(32, 16, activation='relu', kernel_regularizer='l2'))
-    model.add(tf.keras.layers.MaxPool1D(pool_size=4))
-    model.add(tf.keras.layers.Conv1D(64, 8, activation='relu', kernel_regularizer='l2'))
-    model.add(tf.keras.layers.MaxPool1D(pool_size=2))
-    model.add(tf.keras.layers.BatchNormalization())
-
-    # Nuovo layer convoluzionale aggiunto
-    model.add(tf.keras.layers.Conv1D(64, 16, activation='relu', kernel_regularizer='l2'))  # Filtro più grande
-    model.add(tf.keras.layers.MaxPool1D(pool_size=2))
-
-    # Aggiunta di ulteriori layer convoluzionali esistenti
-    model.add(tf.keras.layers.Conv1D(128, 4, activation='relu', kernel_regularizer='l2'))
-    model.add(tf.keras.layers.MaxPool1D(pool_size=2))
-
-    # Nuovo layer GRU con più unità
-    model.add(tf.keras.layers.GRU(64, dropout=0.5, return_sequences=False))  # Più unità GRU
-
-    # Layer densamente connesso finale
-    model.add(tf.keras.layers.Dense(nclasses, activation='sigmoid'))
-
-    return model
-
-
-def modello_scalogrammi_ResNet50(input_shape, nclasses):
-    base_model = tf.keras.applications.ResNet50(
-        include_top=False,
-        weights='imagenet',
-        input_shape=input_shape,
-        pooling= None
-    )
-    base_model.trainable = False  # Freeze the base model
-
-    inputs = Input(shape=input_shape)
-    x = base_model(inputs, training=False)
-    x = GlobalAveragePooling2D()(x)
-    x = Dense(128, activation='relu')(x)
-    x = Dropout(DROPOUT_RATE)(x)
-    outputs = Dense(nclasses, activation='softmax')(x)
-    model = Model(inputs, outputs)
-    model.compile(optimizer=OPTIMIZER, loss = LOSSFUNCTION, metrics=['accuracy'])
-    return model
-
-
-
-def modello_scalogrammi_MobileNetV2(input_shape, nclasses, unfrozen_layers=50):
-    base_model = tf.keras.applications.MobileNetV2(
-        include_top=False,
-        weights='imagenet',
-        input_shape=input_shape,
-        pooling=None
-    )
-    # Freeze all layers first
-    base_model.trainable = False
-
-    # Unfreeze the last 'unfrozen_layers' layers
-    for layer in base_model.layers[-unfrozen_layers:]:
-        layer.trainable = True
-
-    inputs = Input(shape=input_shape)
-    x = base_model(inputs, training=True)
-    x = GlobalAveragePooling2D()(x)
-    x = Dense(128, activation='relu')(x)
-    x = Dropout(DROPOUT_RATE)(x)  # Assuming DROPOUT_RATE is 0.5
-    outputs = Dense(nclasses, activation='softmax')(x)
-    model = Model(inputs, outputs)
-    return model
-
-
-
-def cnnModel2D_0(input_shape, nclasses):
-    model = Sequential()
-
-    model.add(tensorflow.keras.layers.Conv2D(32, kernel_size=(3, 3), activation='relu', input_shape=input_shape))
-    model.add(tensorflow.keras.layers.Conv2D(64, kernel_size=(3, 3), activation='relu'))
-    model.add(tensorflow.keras.layers.MaxPooling2D(pool_size=(2, 2)))
-    model.add(tensorflow.keras.layers.Dropout(0.2))
-
-    model.add(tensorflow.keras.layers.Conv2D(64, kernel_size=(3, 3), activation='relu'))
-    model.add(tensorflow.keras.layers.MaxPooling2D(pool_size=(2, 2)))
-    model.add(tensorflow.keras.layers.Conv2D(128, kernel_size=(3, 3), activation='relu'))
-    model.add(tensorflow.keras.layers.MaxPooling2D(pool_size=(2, 2)))
-    model.add(tensorflow.keras.layers.Dropout(0.2))
-
-    model.add(tensorflow.keras.layers.Flatten())
-    model.add(tensorflow.keras.layers.Dense(256, activation='relu'))
-    model.add(tensorflow.keras.layers.Dropout(0.3))
-    model.add(tensorflow.keras.layers.Dense(nclasses, activation='softmax'))
-    
-    return model
-
-
-def cnnModel2D_1(input_shape, nclasses):
-    model = Sequential()
-
-    model.add(tensorflow.keras.layers.Conv2D(32, kernel_size=(3, 3), activation='relu', input_shape=input_shape))
-    model.add(tensorflow.keras.layers.Conv2D(32, kernel_size=(3, 3), activation='relu'))
-    model.add(tensorflow.keras.layers.MaxPooling2D(pool_size=(2, 2)))
-    model.add(tensorflow.keras.layers.Dropout(0.2))
-
-    model.add(tensorflow.keras.layers.Conv2D(64, kernel_size=(3, 3), activation='relu', input_shape=input_shape))
-    model.add(tensorflow.keras.layers.Conv2D(64, kernel_size=(3, 3), activation='relu'))
-    model.add(tensorflow.keras.layers.MaxPooling2D(pool_size=(2, 2)))
-    model.add(tensorflow.keras.layers.Dropout(0.2))
-
-    model.add(tensorflow.keras.layers.Conv2D(128, kernel_size=(3, 3), activation='relu'))
-    model.add(tensorflow.keras.layers.MaxPooling2D(pool_size=(2, 2)))
-    model.add(tensorflow.keras.layers.Conv2D(128, kernel_size=(3, 3), activation='relu'))
-    model.add(tensorflow.keras.layers.MaxPooling2D(pool_size=(2, 2)))
-    model.add(tensorflow.keras.layers.Dropout(0.2))
-
-    model.add(tensorflow.keras.layers.Flatten())
-    model.add(tensorflow.keras.layers.Dense(256, activation='relu'))
-    model.add(tensorflow.keras.layers.Dropout(0.3))
-    model.add(tensorflow.keras.layers.Dense(nclasses, activation='softmax'))
-    
-    return model
-
-
-
-def vgg19(input_shape, nclasses):
-    base_model = tf.keras.applications.VGG19( 
-                        weights ='imagenet',
-                        include_top = False,
-                        input_shape = input_shape)
-
-    x = base_model.output
-    x = GlobalAveragePooling2D()(x)
-    x = Dense(64, activation='relu')(x)
-    predictions = Dense(nclasses, activation='sigmoid')(x)
-    model = Model(inputs=base_model.input, outputs=predictions)
-    return model
-
-
-def modello_scalogrammi_vgg16(input_shape, nclasses, unfrozen_layers=10):
-    base_model = tf.keras.applications.VGG16(
-        include_top=False,
-        weights='imagenet',
-        input_shape=input_shape,
-        pooling=None
-    )
-    # Freeze all layers first
-    base_model.trainable = False
-
-    # Unfreeze the last 'unfrozen_layers' layers
-    for layer in base_model.layers[-unfrozen_layers:]:
-        layer.trainable = True
-
-    inputs = Input(shape=input_shape)
-    x = base_model(inputs, training=True)
-    x = GlobalAveragePooling2D()(x)
-    x = Dense(128, activation='relu')(x)
-    x = Dropout(DROPOUT_RATE)(x)  # Assuming DROPOUT_RATE is 0.5
-    outputs = Dense(nclasses, activation='softmax')(x)
-    model = Model(inputs, outputs)
-    return model
-
-
+# DEFINE MODEL
 # create train-validation splits for k-fold cross validation
 #dataPaths = glob(os.path.join(f'{DATASETDIR}','control','*.npz'))+ glob(os.path.join(f'{DATASETDIR}','microcirculation','*.npz'))
 dataPaths = glob(os.path.join(f'{DATASETDIR}','target','*.npz'))+ glob(os.path.join(f'{DATASETDIR}','controls','*.npz'))
@@ -709,7 +349,7 @@ for i in range(0, K):
     
     
   # CREATE AND COMPILE MODEL
-  model =  modello_scalogrammi_vgg16(input_shape = INPUT_SHAPE, nclasses = len(CLASSES))
+  model =  InceptionV3(input_shape = INPUT_SHAPE, nclasses = len(CLASSES))
   model.summary()
   model.compile(optimizer=OPTIMIZER,loss=LOSSFUNCTION, metrics=['accuracy'])
 
