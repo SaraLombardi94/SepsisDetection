@@ -22,8 +22,8 @@ from feature_engine.selection import SelectBySingleFeaturePerformance,SmartCorre
 import matplotlib.pyplot as plt
 from sklearn.preprocessing import RobustScaler,OneHotEncoder
 import re 
-import tensorflow as tf
-from tensorflow.keras import layers, models
+# import tensorflow as tf
+# from tensorflow.keras import layers, models
 import seaborn as sns
 import numpy as np
 import shap
@@ -32,8 +32,8 @@ from collections import Counter
 from sklearn.decomposition import PCA
 from sklearn.metrics import f1_score
 
-outputResultsDir = r"D:\phD_Sara\models\features_modello_risultati"
-datasetPath = r"D:/phD_Sara/microcircolo/Sepsis/datasets/controls-microcirculation/datasetSeed4_features/allfeatures.xlsx"
+outputResultsDir = r"C:\Users\Utente\Desktop\Repository GitHub\tesi magistrale\data\dataForML\features_modello_risultati"
+datasetPath = r"C:/Users/Utente/Desktop/Repository GitHub/tesi magistrale/data/dataForML/allfeaturesForStatisticalAnalysis.xlsx"
 CLASSES = ["control", "microcirculation"]
 #CLASSES = ["control", "nonseptic"]
 #CLASSES = ["sepsis", "nonseptic"]
@@ -157,7 +157,7 @@ def correlatedFeaturesSelection(X_train,y_train):
 
 def train_xgboost(X_train, X_test, y_train, y_test):
     # Creazione del modello XGBoost
-    xgboost_model = XGBClassifier(n_estimators=100,learning_rate=0.1,max_depth=2)
+    xgboost_model = XGBClassifier(n_estimators=150,learning_rate=0.1,max_depth=2)
     # Addestramento del modello
     trained_model = xgboost_model.fit(X_train, y_train)
     trainResults = accuracy_score(y_train,trained_model.predict(X_train))
@@ -313,21 +313,21 @@ X = dataset.drop(columns=["subject_id", "class"])
 scaler = StandardScaler()
 X_scaled = scaler.fit_transform(X)
 
-# Applica PCA
-pca = PCA()
-pca.fit(X_scaled)
+# # Applica PCA
+# pca = PCA()
+# pca.fit(X_scaled)
 
-# Calcola la varianza spiegata cumulativa
-explained_variance = np.cumsum(pca.explained_variance_ratio_)
+# # Calcola la varianza spiegata cumulativa
+# explained_variance = np.cumsum(pca.explained_variance_ratio_)
 
-# Traccia la varianza spiegata cumulativa
-plt.figure(figsize=(10, 6))
-plt.plot(range(1, len(explained_variance) + 1), explained_variance, marker='o', linestyle='--')
-plt.xlabel('Number of Components')
-plt.ylabel('Cumulative Explained Variance')
-plt.title('Explained Variance vs. Number of Components')
-plt.grid()
-plt.show()
+# # Traccia la varianza spiegata cumulativa
+# plt.figure(figsize=(10, 6))
+# plt.plot(range(1, len(explained_variance) + 1), explained_variance, marker='o', linestyle='--')
+# plt.xlabel('Number of Components')
+# plt.ylabel('Cumulative Explained Variance')
+# plt.title('Explained Variance vs. Number of Components')
+# plt.grid()
+# plt.show()
 
 y = dataset["class"]
 subjects = dataset['subject_id']
@@ -340,6 +340,10 @@ gkf = GroupKFold(n_splits=K)
 gkf.get_n_splits(X, y, subjects)
 used_features = []
 folds_result = {}
+
+shap_train_values_all_folds = []
+shap_test_values_all_folds = []
+
 for i, (train_index, val_index) in enumerate(gkf.split(X, y, subjects)):
     X_train, y_train = X.iloc[train_index], y.iloc[train_index]
     X_val, y_val = X.iloc[val_index], y.iloc[val_index]
@@ -350,10 +354,10 @@ for i, (train_index, val_index) in enumerate(gkf.split(X, y, subjects)):
     # print(models)
     # # Select features
     features_corr, removed_feat_corr = correlatedFeaturesSelection(X_train, y_train)
-    features_anova = anovaFeatureSelection(X_train[features_corr],y_train,N_FEATURES)
+    #features_anova = anovaFeatureSelection(X_train[features_corr],y_train,N_FEATURES)
     # features_anova = anovaFeatureSelection(X_train,y_train,N_FEATURES)
-    used_features.extend(features_anova)
-    X_train_s, X_val_s = X_train[features_anova], X_val[features_anova]
+    used_features.extend(features_corr)
+    X_train_s, X_val_s = X_train[features_corr], X_val[features_corr]
     #X_train_s, X_val_s = X_train, X_val
     # normalize data based on training set distribution
     X_train_std, X_val_std = robust_scaling(X_train_s, X_val_s)
@@ -363,6 +367,8 @@ for i, (train_index, val_index) in enumerate(gkf.split(X, y, subjects)):
     cm_xgb, metrics_xgb = create_confusion_matrix(y_val, y_pred_xgb, CLASSES)
     folds_result[f'Fold{i}'] = metrics_xgb
     shap_values_train_xgb, shap_values_test_xgb = calculate_SHAP(xgb_model, X_train_std, X_val_std)
+    
+
     #train rf model
     # print(f"RandomForest \n")
     # rf_model, y_pred_rf = train_random_forest(X_train_std, X_val_std, y_train, y_val)
@@ -377,10 +383,14 @@ for i, (train_index, val_index) in enumerate(gkf.split(X, y, subjects)):
     # rf_model_pca, y_pred_rf_pca = train_random_forest(X_train_pca, X_val_pca, y_train, y_val)
     # cm_rf_pca, metrics_rf_pca = create_confusion_matrix(y_val, y_pred_rf_pca, CLASSES)
     #shap_values_train_xgb_pca, shap_values_test_xgb_pca = calculate_SHAP(xgb_model, X_train_pca, X_val_pca)
+
+
+    
+
 model_result = pd.DataFrame(folds_result)
 model_result['Mean'] = model_result.mean(axis=1)
 print(model_result['Mean'])
-model_result.to_excel(os.path.join(outputResultsDir,f"xgboost_n_est100,lr0.1,m_depth2_pearson08_mutual12.xlsx"))
+model_result.to_excel(os.path.join(outputResultsDir,f"xgboost_n_est150,lr0.1,m_depth2_pearson07.xlsx"))
 
     
     
