@@ -1,42 +1,35 @@
 # -*- coding: utf-8 -*-
 """
-Created on Mon Jun 24 15:52:33 2024
-
+Created on Tue May 14 15:11:07 2024
 @author: Utente
 """
-
 
 import random
 import os
 import numpy as np
-import tensorflow.keras
 import tensorflow as tf
+import tensorflow.keras
 from glob import glob
-#import tensorflow_addons as tfa
 import sklearn
 from tensorflow.keras.utils import to_categorical
 from sklearn.model_selection import KFold, train_test_split, GroupShuffleSplit, StratifiedGroupKFold, GroupKFold
 from sklearn import preprocessing
 from sklearn.utils import shuffle
 from scipy.fft import fft
-#model
-from tensorflow.keras.models import Model, Sequential
-from tensorflow.keras.layers import Input, Add, Dense, BatchNormalization, Activation, Dropout, Flatten, GlobalAveragePooling2D
-from tensorflow.keras.layers import Convolution1D, ZeroPadding1D, MaxPooling1D, AveragePooling1D
-from tensorflow.keras.layers import LSTM, TimeDistributed
-from tensorflow.keras.callbacks import TensorBoard, ModelCheckpoint
-from tensorflow.keras.callbacks import ReduceLROnPlateau, LearningRateScheduler
 import matplotlib.pyplot as plt
 from tensorflow.keras.layers import Input, LSTM, Dense, Dropout, Bidirectional
 from tensorflow.keras.initializers import GlorotUniform
 import ssqueezepy as sp
 from scipy.ndimage import zoom
+from dnnImageModels import *
+from tensorflow.keras.callbacks import TensorBoard, ModelCheckpoint
+from tensorflow.keras.callbacks import ReduceLROnPlateau, LearningRateScheduler
 #constants
 FS = 125
 N_CLASSES = 2 # control, sepsis 
 LR = 1e-4
-BATCH_SIZE = 16   #aggiornamento dei pesi della rete 
-EPOCHS = 100
+BATCH_SIZE = 64  #aggiornamento dei pesi della rete 
+EPOCHS = 300
 K = 5
 NSAMPLES = FS*30
 WINDOW_LENGTH = FS * 30 * 1 
@@ -54,13 +47,13 @@ BUFFER_SHUFFLING_SIZE = 180
 KERNEL_INITIALIZER='glorot_uniform'
 LOSSFUNCTION = tf.keras.losses.BinaryCrossentropy()
 OPTIMIZER = tf.keras.optimizers.Adam(learning_rate=LR)
-MODELNAME = f'{K}fold_modello_scalogrammi_vgg16_unfrozen10_bs{BATCH_SIZE}_lre{LR}_windows{WINDOW_LENGTH}onset_ep{EPOCHS}'
+MODELNAME = f'{K}fold_InceptionV3_unfrozen15_dropout0.2_bs{BATCH_SIZE}_lre{LR}_windows{WINDOW_LENGTH}onset_ep{EPOCHS}'
 
-MODELDIR = r'C:\Users\Utente\Desktop\wetransfer_controls-microcirculation_2024-04-23_1250\controls-microcirculation\tf_bilanciato'
-DATASETDIR = r'C:\Users\Utente\Desktop\wetransfer_controls-microcirculation_2024-04-23_1250\controls-microcirculation\tf_bilanciato'
+MODELDIR = r'D:\phD_Sara\models\control_target\scalograms'
+DATASETDIR = r'D:\phD_Sara\microcircolo\Sepsis\datasets\controls-microcirculation\datasetSeed4'
 LOGDIR = os.path.join(MODELDIR,MODELNAME,'logs')
 WEIGHTSDIR = os.path.join(MODELDIR,MODELNAME,'weights')
-CLASSES = ['control','microcirculation']
+CLASSES = ['controls','target']
 #PRETRAINED_MODELPATH = '/Users/saralombardi/Desktop/COVID/pre-trainedsepsi'
 
 class LRTensorBoard(TensorBoard):
@@ -95,7 +88,6 @@ def normalize(x):
 
 ###  AGGIUSTATA  #####
 def load_and_select_window(filepath, y):
-    tf.print("ok")
     # Assicurati che filepath sia una stringa
     filepath = tf.compat.as_str_any(filepath)
     # Costruisci il percorso per i punti di inizio basato sul percorso del file originale
@@ -124,7 +116,6 @@ def resize_array(array, target_height, target_width):
     
     return resized_array
 
-
 def load_and_select_window_with_scalogram(filepath, y):
     #print("Function load_and_select_window_with_scalogram called")  # Debug print
     filepath = tf.compat.as_str_any(filepath)
@@ -145,11 +136,11 @@ def load_and_select_window_with_scalogram(filepath, y):
     y = to_categorical(y, num_classes=len(CLASSES))
     
     # Compute scalogram
-    Wx, scales, _ = sp.cwt(signal_data, 'morlet', scales='log', derivative=False, nv=32)
+    Wx, scales = sp.cwt(signal_data, 'morlet', scales='log', derivative=False, nv=32)
     Wx = np.abs(Wx)
     # Convert to image
-    Wx_with_channel = Wx[:, :, np.newaxis]
-    Wx_rgb = np.concatenate([Wx_with_channel]*3, axis=-1)
+    Wx_rgb = Wx[:, :, np.newaxis]
+    Wx_rgb = np.concatenate([Wx_rgb]*3, axis=-1)
     Wx_rgb = Wx_rgb.astype(np.float32)
     #tf.print(f"{Wx_rgb.shape}_conv")
 
@@ -203,28 +194,30 @@ def jitter(x, y):
 
 
 ####### AGGIUSTATA ##########
-def get_id(data_path):
-    sub_ids = []
-    for item in data_path:
-        file_name = os.path.basename(item)  # Ottiene il nome del file dalla directory
-        sub_id = file_name[:7]  # Estrae i primi 7 caratteri del nome del file
-        if not sub_id.startswith('p'):
-            raise Exception(f'Subject name has to start with "p", for example pleth0. Found {sub_id}')
-        sub_ids.append(sub_id)
-    return sub_ids
+# def get_id(data_path):
+#     sub_ids = []
+#     for item in data_path:
+#         file_name = os.path.basename(item)  # Ottiene il nome del file dalla directory
+#         sub_id = file_name[:7]  # Estrae i primi 7 caratteri del nome del file
+#         if not sub_id.startswith('p'):
+#             raise Exception(f'Subject name has to start with "p", for example pleth0. Found {sub_id}')
+#         sub_ids.append(sub_id)
+#     return sub_ids
 
-'''
+
 def get_id(data_path):
   sub_ids=[]
   for item in data_path:
     file_name = item.split(os.path.sep)[-1].rstrip('.npz')
-    sub_id = file_name.split('_')[0]
+    if "_" in file_name:
+        sub_id = file_name.split('_')[0]
+    elif "-" in file_name:
+        sub_id = file_name.split('-')[0]
     if not sub_id.startswith('p'):
       raise Exception(f'Subject name has to start with "p", for example pleth0. Found {sub_id}')
     sub_ids.append(sub_id)
   return sub_ids
-'''
-
+   
 
 # Funzione per plottare le immagini scalogrammi nel dataset
 def plot_dataset_samples(dataset, num_samples=5):
@@ -232,13 +225,12 @@ def plot_dataset_samples(dataset, num_samples=5):
         for j in range(image_batch.shape[0]):  # Itera attraverso ogni immagine nel batch
             image = image_batch[j].numpy()
             label = label_batch[j].numpy()
-            plt.figure(figsize=(8, 4))
-            plt.imshow(image.astype('float32'), aspect='auto', cmap='viridis')
-            plt.title(f'Sample {i+1}-{j+1} - Label: {CLASSES[np.argmax(label)]}')
-            plt.colorbar()
-            plt.show()
-        
-        
+            # plt.figure(figsize=(8, 4))
+            # plt.imshow(image.astype('float32'), aspect='auto', cmap='viridis')
+            # plt.title(f'Sample {i+1}-{j+1} - Label: {CLASSES[np.argmax(label)]}')
+            # plt.colorbar()
+            # plt.show()
+           
 
 ###################
 
@@ -264,8 +256,8 @@ def create_train_val_splits(train_paths):
       y_train_splits.append(y_train)
       X_val_splits.append(X_val)
       y_val_splits.append(y_val)
+      
   return X_train_splits, y_train_splits, X_val_splits, y_val_splits
-
 
 
 def create_dataset(X_train, y_train, X_val, y_val):
@@ -297,50 +289,17 @@ def create_dataset(X_train, y_train, X_val, y_val):
   if USE_SCALOGRAM:
         ds_valid = ds_valid.map(lambda filepath, label: tf.numpy_function(
             load_and_select_window_with_scalogram, [filepath, label], [tf.float32, tf.float32]))
-
-
   
   ds_valid = ds_valid.cache()
   ds_valid = ds_valid.batch(BATCH_SIZE)
   ds_valid = ds_valid.map(fix_shape)
+  
   return ds_train, ds_valid
 
-
-# DEFINE MODELS
-
-############    LA PRIMA DA PROVARE      #################
-
-
-
-
-
-def modello_scalogrammi_vgg16(input_shape, nclasses, unfrozen_layers=10):
-    base_model = tf.keras.applications.VGG16(
-        include_top=False,
-        weights='imagenet',
-        input_shape=input_shape,
-        pooling=None
-    )
-    # Freeze all layers first
-    base_model.trainable = False
-
-    # Unfreeze the last 'unfrozen_layers' layers
-    for layer in base_model.layers[-unfrozen_layers:]:
-        layer.trainable = True
-
-    inputs = Input(shape=input_shape)
-    x = base_model(inputs, training=True)
-    x = GlobalAveragePooling2D()(x)
-    x = Dense(128, activation='relu')(x)
-    x = Dropout(DROPOUT_RATE)(x)  # Assuming DROPOUT_RATE is 0.5
-    outputs = Dense(nclasses, activation='softmax')(x)
-    model = Model(inputs, outputs)
-    return model
-
-
+# DEFINE MODEL
 # create train-validation splits for k-fold cross validation
-dataPaths = glob(os.path.join(f'{DATASETDIR}','control','*.npz'))+ glob(os.path.join(f'{DATASETDIR}','microcirculation','*.npz'))
-#dataPaths = glob(os.path.join(f'{DATASETDIR}','target','*.npz'))+ glob(os.path.join(f'{DATASETDIR}','controls','*.npz'))
+#dataPaths = glob(os.path.join(f'{DATASETDIR}','control','*.npz'))+ glob(os.path.join(f'{DATASETDIR}','microcirculation','*.npz'))
+dataPaths = glob(os.path.join(f'{DATASETDIR}','target','*.npz'))+ glob(os.path.join(f'{DATASETDIR}','controls','*.npz'))
 print(len(dataPaths))
 groups = get_id(dataPaths)
 groups = list(np.unique(groups))
@@ -369,8 +328,8 @@ for i in range(0, K):
   ds_train, ds_valid = create_dataset(X_train, y_train, X_val, y_val)
   
   if USE_SCALOGRAM:
-      # Per plottare le prime N immagini dal dataset di training
-      plot_dataset_samples(ds_train, num_samples=5)
+     # Per plottare le prime N immagini dal dataset di training
+     plot_dataset_samples(ds_train, num_samples=5)
     
     
   if USE_SCALOGRAM:
@@ -390,7 +349,7 @@ for i in range(0, K):
     
     
   # CREATE AND COMPILE MODEL
-  model =  modello_scalogrammi_vgg16(input_shape = INPUT_SHAPE, nclasses = len(CLASSES))
+  model =  InceptionV3(input_shape = INPUT_SHAPE, nclasses = len(CLASSES))
   model.summary()
   model.compile(optimizer=OPTIMIZER,loss=LOSSFUNCTION, metrics=['accuracy'])
 
@@ -448,3 +407,45 @@ np.savetxt(os.path.join(MODELDIR,MODELNAME,'accuracies.txt'), accuracies)
 np.savetxt(os.path.join(MODELDIR,MODELNAME,'losses.txt'), losses)
 print(f'Mean accuracy is : {np.mean(accuracies)}')
 print(f'Mean loss is : {np.mean(losses)}')
+
+"""
+##########saliency map #########
+sample_signal, classe = load_and_select_window('C:/Users/Utente/Desktop/wetransfer_controls-microcirculation_2024-04-23_1250/controls-microcirculation/tf_bilanciato/microcirculation/plre90.npy_#99.npz',1)
+
+# Assumi che 'model' sia il tuo modello già addestrato e 'sample_signal' sia un segnale PPG che hai già preparato e normalizzato
+sample_signal = tf.convert_to_tensor(sample_signal, dtype=tf.float32)
+sample_signal = tf.expand_dims(sample_signal, axis=0)  # Aggiungi una dimensione batch se necessario
+
+with tf.GradientTape() as tape:
+    tape.watch(sample_signal)
+    predictions = model(sample_signal)
+    class_idx = tf.argmax(predictions[0])  # Ottieni l'indice della classe con la probabilità più alta
+    output = predictions[:, class_idx]
+
+# Calcola i gradienti dell'output rispetto all'input
+gradients = tape.gradient(output, sample_signal)
+
+# Calcola il valore assoluto dei gradienti e fai la media lungo l'asse del canale se necessario
+grad_abs = tf.reduce_mean(tf.abs(gradients), axis=-1)
+
+# Riduci la dimensione dell'array a 2D se necessario
+if grad_abs.ndim > 1:
+    grad_abs = tf.squeeze(grad_abs)
+
+# Assicurati che grad_abs sia un array 2D aggiungendo una nuova dimensione se è un array 1D
+if grad_abs.ndim == 1:
+    grad_abs = grad_abs[None, :]  # Aggiungi una dimensione fittizia per renderlo 2D
+
+# Visualizza il segnale e la saliency map
+plt.figure(figsize=(10, 4))
+plt.subplot(1, 2, 1)
+plt.title('Original PPG Signal')
+plt.plot(np.squeeze(sample_signal.numpy()))  # Converti il tensore in un array NumPy per il plotting
+
+plt.subplot(1, 2, 2)
+plt.title('Saliency Map')
+# Usa imshow per creare un mappable
+im = plt.imshow(grad_abs, aspect='auto', cmap='viridis', extent=[0, grad_abs.shape[-1], 0, 1])
+plt.colorbar(im)  # Aggiungi la colorbar riferendoti a 'im'
+plt.show()
+"""
