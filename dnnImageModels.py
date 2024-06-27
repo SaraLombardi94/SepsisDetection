@@ -10,7 +10,10 @@ from tensorflow.keras.models import Model, Sequential
 from tensorflow.keras.layers import Input, Add, Dense, BatchNormalization, Activation, Dropout, Flatten, GlobalAveragePooling2D, AveragePooling2D
 from tensorflow.keras.layers import Convolution1D, ZeroPadding1D, MaxPooling1D, AveragePooling1D, Conv2D, MaxPooling2D, concatenate
 from tensorflow.keras.layers import LSTM, TimeDistributed
-DROPOUT_RATE = 0.2
+
+DROPOUT_RATE = 0.3
+
+
 def saraCnnEnhanced(input_shape, nclasses):
     x_input = Input(input_shape)
     
@@ -387,7 +390,7 @@ def vgg19(input_shape, nclasses):
     return model
 
 
-def modello_scalogrammi_vgg16(input_shape, nclasses, unfrozen_layers=10):
+def modello_scalogrammi_vgg16(input_shape, nclasses, unfrozen_layers=15):
     base_model = tf.keras.applications.VGG16(
         include_top=False,
         weights='imagenet',
@@ -402,9 +405,9 @@ def modello_scalogrammi_vgg16(input_shape, nclasses, unfrozen_layers=10):
         layer.trainable = True
 
     inputs = Input(shape=input_shape)
-    x = base_model(inputs, training=True)
+    x = base_model(inputs, training=False)
     x = GlobalAveragePooling2D()(x)
-    x = Dense(128, activation='relu')(x)
+    x = Dense(128, activation='relu',kernel_regularizer=tf.keras.regularizers.l2(0.01))(x)
     x = Dropout(DROPOUT_RATE)(x)  # Assuming DROPOUT_RATE is 0.5
     outputs = Dense(nclasses, activation='softmax')(x)
     model = Model(inputs, outputs)
@@ -425,8 +428,15 @@ def InceptionV3(input_shape, nclasses, unfrozen_layers=15):
     for layer in base_model.layers[-unfrozen_layers:]:
         layer.trainable = True
 
+    # x = base_model.output
+    # x = GlobalAveragePooling2D()(x)
+    # x = Dense(128, activation='relu')(x)
+    # x = Dropout(DROPOUT_RATE)(x)
+    # outputs = Dense(nclasses, activation='softmax')(x)
+    # model = Model(inputs=base_model.input, outputs=outputs)
+
     inputs = Input(shape=input_shape)
-    x = base_model(inputs, training=True)
+    x = base_model(inputs,training=False)
     x = GlobalAveragePooling2D()(x)
     x = Dense(128, activation='relu')(x)
     x = Dropout(DROPOUT_RATE)(x)
@@ -439,21 +449,21 @@ def InceptionResNetV2(input_shape, nclasses, unfrozen_layers=15):
         include_top=False,
         weights="imagenet",
         input_tensor=None,
-        input_shape=input_shape,
+        input_shape=None,
         pooling=None,
         )  
     # Freeze all layers first
-    base_model.trainable = False
+    base_model.trainable = True
 
-    # Unfreeze the last 'unfrozen_layers' layers
-    for layer in base_model.layers[-unfrozen_layers:]:
-        layer.trainable = True
+    # # Unfreeze the last 'unfrozen_layers' layers
+    # for layer in base_model.layers[-unfrozen_layers:]:
+    #     layer.trainable = True
 
-    inputs = Input(shape=input_shape)
-    x = base_model(inputs, training=True)
+    #inputs = Input(shape=input_shape)
+    x = base_model(input_shape=input_shape)
     x = GlobalAveragePooling2D()(x)
     x = Dense(128, activation='relu')(x)
     x = Dropout(DROPOUT_RATE)(x)
     outputs = Dense(nclasses, activation='softmax')(x)
-    model = Model(inputs, outputs)
+    model = Model(base_model.input, outputs)
     return model

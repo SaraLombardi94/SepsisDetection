@@ -27,7 +27,7 @@ from tensorflow.keras.callbacks import ReduceLROnPlateau, LearningRateScheduler
 #constants
 FS = 125
 N_CLASSES = 2 # control, sepsis 
-LR = 1e-4
+LR = 5e-5
 BATCH_SIZE = 64  #aggiornamento dei pesi della rete 
 EPOCHS = 300
 K = 5
@@ -47,9 +47,9 @@ BUFFER_SHUFFLING_SIZE = 180
 KERNEL_INITIALIZER='glorot_uniform'
 LOSSFUNCTION = tf.keras.losses.BinaryCrossentropy()
 OPTIMIZER = tf.keras.optimizers.Adam(learning_rate=LR)
-MODELNAME = f'{K}fold_InceptionV3_unfrozen15_dropout0.2_bs{BATCH_SIZE}_lre{LR}_windows{WINDOW_LENGTH}onset_ep{EPOCHS}'
-
-MODELDIR = r'D:\phD_Sara\models\control_target\scalograms'
+MODELNAME = f'{K}fold_modello_scalogrammi_InceptionV3_unfrozen15_trainFalse_dropout0.3_bs{BATCH_SIZE}_lre{LR}_windows{WINDOW_LENGTH}onset_ep{EPOCHS}'
+#MODELNAME = f'{K}provagradcam2'
+MODELDIR = r'D:\phD_Sara\models\bestModelImage'
 DATASETDIR = r'D:\phD_Sara\microcircolo\Sepsis\datasets\controls-microcirculation\datasetSeed4'
 LOGDIR = os.path.join(MODELDIR,MODELNAME,'logs')
 WEIGHTSDIR = os.path.join(MODELDIR,MODELNAME,'weights')
@@ -150,7 +150,6 @@ def load_and_select_window_with_scalogram(filepath, y):
     else:    
         return Wx_rgb, y
 
-
 ######################
 
 def fix_shape(x, y):
@@ -165,7 +164,6 @@ def fix_shape(x, y):
     y.set_shape([None, 2])
 
   return x, y
-
 
 # augmenting functions 
 def calculate_fft(x, y):
@@ -191,7 +189,6 @@ def jitter(x, y):
     sigma = 0.01
     x_jitter = x + np.random.normal(loc=0., scale=sigma, size=x.shape)
     return x_jitter, y
-
 
 ####### AGGIUSTATA ##########
 # def get_id(data_path):

@@ -33,14 +33,14 @@ from tensorflow.keras.callbacks import TensorBoard, ModelCheckpoint
 from tensorflow.keras.callbacks import ReduceLROnPlateau, LearningRateScheduler
 from sklearn.metrics import classification_report,accuracy_score,confusion_matrix
 import seaborn as sns
+import cv2
 
 
 outExcelPath = r"D:/phD_Sara/models/results/resultsScalogram.xlsx"
 FS = 125
 N_CLASSES = 2 # control, sepsis 
 LR = 1e-4
-BATCH_SIZE = 32  #aggiornamento dei pesi della rete 
-EPOCHS = 200
+BATCH_SIZE = 1
 N_FOLD = 5
 NSAMPLES = FS*30
 WINDOW_LENGTH = FS * 30 * 1 
@@ -54,7 +54,7 @@ USE_LOSO = False
 USE_SCALOGRAM = True
 RESIZE_IMG = True
 SAVE_RESULT = True
-mainDir = r"D:\phD_Sara\models\bestModelImage"
+mainDir = r"D:\phD_Sara\models\gradCamTest"
 
 
 def createLabels(data,classes):
@@ -85,7 +85,8 @@ def load_and_select_window_with_scalogram(filepath, y):
     filepath = tf.compat.as_str_any(filepath)
     pathToPoints = filepath.removesuffix('.npz') + '.txt'
     onsetList = np.loadtxt(pathToPoints).astype(np.int64)
-    start_timestep = random.choice(onsetList)
+    #start_timestep = random.choice(onsetList)
+    start_timestep = onsetList[0]
     signal_data = np.load(filepath)['arr_0'].astype('float64')
     
     if NORMALIZE:
@@ -140,6 +141,117 @@ def get_id(data_path):
     sub_ids.append(sub_id)
   return sub_ids
 
+def compute_saliency_map(model, img_array, class_index=None):
+    img_tensor = tf.convert_to_tensor(img_array, dtype=tf.float32)
+    if len(img_tensor.shape) == 3:
+        img_tensor = tf.expand_dims(img_tensor, axis=0)
+    
+    with tf.GradientTape() as tape:
+        tape.watch(img_tensor)
+        preds = model(img_tensor, training=False)
+        if class_index is None:
+            class_index = tf.argmax(preds[0])
+        output = preds[:, class_index]
+
+    grads = tape.gradient(output, img_tensor)
+    saliency = tf.reduce_max(tf.abs(grads), axis=-1)
+    saliency = saliency[0]  # Rimuovi la dimensione del batch
+    return saliency.numpy()
+
+
+def plot_saliency_map(saliency_map, img_array):
+    fig, ax = plt.subplots(1, 2, figsize=(12, 6))
+
+    # Immagine originale
+    ax[0].imshow(img_array.squeeze(), cmap='gray')
+    ax[0].axis('off')
+    ax[0].set_title('Immagine originale')
+
+    # Saliency Map
+    ax[1].imshow(saliency_map, cmap='hot')
+    ax[1].axis('off')
+    ax[1].set_title('Saliency Map')
+
+    plt.show()
+
+def plot_saliency_map_overlay(saliency_map, img_array, alpha=0.8, colormap='hot'):
+    # Normalizza la saliency map tra 0 e 1
+    saliency_map -= saliency_map.min()
+    saliency_map /= saliency_map.max()
+    
+    # Usa la colormap specificata per la visualizzazione
+    cmap = plt.cm.get_cmap(colormap)
+    colored_saliency_map = cmap(saliency_map)
+
+    # Rimuovi il canale alpha della colormap
+    colored_saliency_map = np.delete(colored_saliency_map, 3, 2)
+
+    # Ridimensionare la saliency map per adattarla all'immagine
+    colored_saliency_map = tf.image.resize(colored_saliency_map, (img_array.shape[0], img_array.shape[1]))
+    colored_saliency_map = tf.keras.preprocessing.image.array_to_img(colored_saliency_map)
+    colored_saliency_map = np.array(colored_saliency_map)
+
+    # Sovrapporre la saliency map all'immagine
+    superimposed_img = (colored_saliency_map * alpha + img_array.squeeze() * (1 - alpha)).astype(np.uint8)
+
+    # Plot immagine originale e superimposed_img
+    fig, ax = plt.subplots(1, 2, figsize=(12, 6))
+    
+    ax[0].imshow(img_array.squeeze(), cmap='gray')
+    ax[0].axis('off')
+    ax[0].set_title('Immagine originale')
+    
+    ax[1].imshow(superimposed_img)
+    ax[1].axis('off')
+    ax[1].set_title('Saliency Map Overlay')
+
+    plt.show()
+
+
+def make_gradcam_heatmap(img_array, model, last_conv_layer_name, pred_index=None):
+    # Ottieni il modello InceptionV3 e il layer finale convoluzionale
+    inception_model = model.get_layer('inception_v3')
+    last_conv_layer = inception_model.get_layer(last_conv_layer_name)
+
+    # Costruisci il modello Grad-CAM con l'input originale e mappa attraverso InceptionV3
+    grad_model = keras.models.Model(
+        inputs = [model.inputs],  
+        outputs = [inception_model.output, model.output]
+    )
+    img_tensor = tf.convert_to_tensor(img_array)
+    with tf.GradientTape() as tape:
+        if len(img_tensor.shape) == 3:
+            img_tensor = np.expand_dims(img_tensor, axis=0)
+            
+        # Traccia i gradienti rispetto agli input
+        tape.watch(img_tensor)
+        
+        last_conv_layer_output, preds = grad_model(img_tensor)
+        if pred_index is None:
+            pred_index = tf.argmax(preds[0])
+        class_channel = preds[:, pred_index]
+
+    grads = tape.gradient(class_channel, last_conv_layer_output)#, unconnected_gradients=tf.UnconnectedGradients.ZERO)
+    print("grads shape:", grads.shape)
+    pooled_grads = tf.reduce_mean(grads, axis=(0, 1, 2))
+    last_conv_layer_output = last_conv_layer_output[0]
+    heatmap = last_conv_layer_output @ pooled_grads[..., tf.newaxis]
+    heatmap = tf.squeeze(heatmap)
+    heatmap = tf.maximum(heatmap, 0) / tf.math.reduce_max(heatmap)
+    return heatmap.numpy()
+
+
+
+def save_and_display_gradcam(img_array, heatmap, alpha=0.4):
+    heatmap = np.uint8(255 * heatmap)
+    jet = cv2.applyColorMap(heatmap, cv2.COLORMAP_JET)
+    img = cv2.cvtColor(np.uint8(255 * img_array), cv2.COLOR_RGB2BGR)
+    superimposed_img = jet * alpha + img
+    cv2.imwrite('cam.jpg', superimposed_img)
+    plt.imshow(cv2.cvtColor(superimposed_img, cv2.COLOR_BGR2RGB))
+    plt.show()
+
+
 def create_dataset(X_val, y_val):
   ds_valid = tf.data.Dataset.from_tensor_slices((X_val, y_val))
 
@@ -158,6 +270,17 @@ def create_dataset(X_val, y_val):
   
   return ds_valid
 
+from tensorflow.keras import backend as K
+
+
+def set_model_to_inference(model):
+    for layer in model.layers:
+        if "batch_normalization" in layer.name:
+            layer.trainable = False
+        elif hasattr(layer, 'layers'):  # per gestire modelli annidati
+            set_model_to_inference(layer)
+
+    
 def create_confusion_matrix(y,y_pred,classLabel,title):
   cm = confusion_matrix(y, y_pred)
   df_cm = pd.DataFrame(cm, classLabel, classLabel)
@@ -193,15 +316,16 @@ def create_confusion_matrix(y,y_pred,classLabel,title):
   print(f'Sensitivity is : {100*TPR:0.2f}%')
   print(f'Specificity is {100*TNR:0.2f}%')  
   print(f'Precision is {100*PPV:0.2f}%')
-  return cm, ACC, TPR, TNR
+  return cm, ACC, TPR, TNR, PPV
 
 for dnn in glob(os.path.join(mainDir,"*")):
     modelDir = os.path.join(dnn,"weights")
+    print(f" Evaluating model {dnn} \n \n")
     valtxtDir = os.path.join(dnn,"logs")
     #modelDir = r"D:\phD_Sara\models\control_target\signals\k5_gruSara3bis_plus_attention_lr5e-06__BATCH64_ep50020240528_120804\weights"
     #valtxtDir = r"D:\phD_Sara\models\control_target\signals\k5_gruSara3bis_plus_attention_lr5e-06__BATCH64_ep50020240528_120804\logs"
     results = []
-    accuracies, sensitivities, specificities = [],[],[]
+    accuracies, sensitivities, specificities, precisions = [],[],[],[]
     for fold in range(N_FOLD):
         modelPath = os.path.join(modelDir,f"{fold}fold.keras")
         txtData = os.path.join(valtxtDir,f"{fold}fold",f"X_val{fold}.txt")
@@ -214,24 +338,39 @@ for dnn in glob(os.path.join(mainDir,"*")):
         except:
            print(modelPath)
            continue
+
+
+        #set_model_to_inference(model)
         y_pred = model.predict(ds_valid, verbose=1)
         y_pred_class = np.argmax(y_pred,axis=1)
-        cm, acc, sens, spec = create_confusion_matrix(y_val,y_pred_class,CLASSES,f"{fold}_{modelDir.split(os.path.sep)[-2]}")
-        accuracies.append(acc), sensitivities.append(sens), specificities.append(spec)
+        cm, acc, sens, spec, precision = create_confusion_matrix(y_val,y_pred_class,CLASSES,f"{fold}_{modelDir.split(os.path.sep)[-2]}")
+        accuracies.append(acc), sensitivities.append(sens), specificities.append(spec),precisions.append(precision)
         indexes = [i for i in range(len(y_val)) if y_val[i] != y_pred_class[i]]
         wrong_predictions = val_paths[indexes]
-        print(wrong_predictions)
+        #print(wrong_predictions)
+        for step, (img_array, label) in enumerate(ds_valid.take(1)):
+            img_array = img_array[0].numpy()
+            saliency_map = compute_saliency_map(model, img_array, class_index=None)
+            plot_saliency_map_overlay(saliency_map, img_array)
+            # # Calcola la mappa Grad-CAM
+            # last_conv_layer_name = 'mixed10'  # Ultimo strato convoluzionale in InceptionV3
+            # heatmap = make_gradcam_heatmap(img_array, model, last_conv_layer_name)
+
+            # # Visualizza lo scalogramma con Grad-CAM sovrapposto
+            # save_and_display_gradcam(img_array, heatmap)
         
     print(f"Model {modelDir.split(os.path.sep)[-2]}\n")
     print(f"Mean Accuracies: {np.mean(np.array(accuracies))}\n ")
     print(f"Mean Sensitivity: {np.mean(np.array(sensitivities))}\n")
     print(f"Mean Specificity: {np.mean(np.array(specificities))}\n")
+    print(f"Mean Precision: {np.mean(np.array(precisions))}\n")
     
     results.append({
         "Model": modelDir.split(os.path.sep)[-2],
         "Accuracy": np.mean(np.array(accuracies)),
         "Sensitivity": np.mean(np.array(sensitivities)),
-        "Specificity": np.mean(np.array(specificities))
+        "Specificity": np.mean(np.array(specificities)),
+        "Precision": np.mean(np.array(precisions))
         })
     
     if SAVE_RESULT:
