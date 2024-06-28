@@ -24,6 +24,7 @@ from scipy.ndimage import zoom
 from dnnImageModels import *
 from tensorflow.keras.callbacks import TensorBoard, ModelCheckpoint
 from tensorflow.keras.callbacks import ReduceLROnPlateau, LearningRateScheduler
+from keras.applications.inception_v3 import preprocess_input
 #constants
 FS = 125
 N_CLASSES = 2 # control, sepsis 
@@ -47,7 +48,7 @@ BUFFER_SHUFFLING_SIZE = 180
 KERNEL_INITIALIZER='glorot_uniform'
 LOSSFUNCTION = tf.keras.losses.BinaryCrossentropy()
 OPTIMIZER = tf.keras.optimizers.Adam(learning_rate=LR)
-MODELNAME = f'{K}fold_modello_scalogrammi_InceptionV3_unfrozen15_trainFalse_dropout0.3_bs{BATCH_SIZE}_lre{LR}_windows{WINDOW_LENGTH}onset_ep{EPOCHS}'
+MODELNAME = f'{K}fold_modello_scalogrammi_normalized_InceptionV3_unfrozen10_trainFalse_dropout0.3_bs{BATCH_SIZE}_lre{LR}_windows{WINDOW_LENGTH}onset_ep{EPOCHS}'
 #MODELNAME = f'{K}provagradcam2'
 MODELDIR = r'D:\phD_Sara\models\bestModelImage'
 DATASETDIR = r'D:\phD_Sara\microcircolo\Sepsis\datasets\controls-microcirculation\datasetSeed4'
@@ -146,7 +147,9 @@ def load_and_select_window_with_scalogram(filepath, y):
 
     if RESIZE_IMG:
         resized_image = resize_array(Wx_rgb, 224, 224)
-        return resized_image, y
+        image_rgb = tf.keras.utils.array_to_img(resized_image)
+        preprocessed = preprocess_input(tf.keras.utils.img_to_array(image_rgb))
+        return preprocessed, y
     else:    
         return Wx_rgb, y
 
